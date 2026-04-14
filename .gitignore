@@ -37,7 +37,7 @@ resize_textures.py
 # Heavy unused assets (Giữ lại public/Test.vrm, bỏ qua Avatar.vrm to kềnh)
 public/Avatar.vrm
 public/Avatar_old.vrm
-public/animations/
+# public/animations/ <- Bỏ comment/Xóa dòng này để đẩy animation lên
 
 # Các folder nháp
 animations/

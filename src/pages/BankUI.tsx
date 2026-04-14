@@ -3,13 +3,13 @@ import AiAssistantWidget from "../components/AiAssistantWidget";
 
 export default function BankUI() {
   const [notification, setNotification] = useState("");
-  const [activeTab, setActiveTab] = useState("Trang chủ");
+  const [activeTab, setActiveTab] = useState("Home");
 
   const handleServiceClick = (serviceName: string) => {
     setNotification(
-      `Bạn vừa chọn tính năng ${serviceName}. Bạn có cần tôi hỗ trợ hướng dẫn không?`,
+      `You selected ${serviceName}. Do you need instructions or further assistance?`,
     );
-    setActiveTab("Trợ lý AI");
+    setActiveTab("AI Advisor");
   };
 
   return (
@@ -54,9 +54,9 @@ export default function BankUI() {
         </div>
       </header>
 
-      {/* NỘI DUNG TÙY TAB */}
+      {/* DYNAMIC TAB CONTENT */}
       <main className="w-full">
-        {activeTab === "Trang chủ" && (
+        {activeTab === "Home" && (
           <>
             {/* Hero Section & Greeting */}
             <section className="relative h-64 overflow-hidden">
@@ -68,9 +68,9 @@ export default function BankUI() {
               <div className="absolute inset-0 bg-gradient-to-b from-transparent to-[#00306b]/40"></div>
               <div className="absolute bottom-8 left-0 right-0 px-6 text-center">
                 <p className="text-white font-headline text-lg font-bold leading-snug">
-                  Chào mừng Quý khách đến với
+                  Welcome to
                   <br />
-                  Shinhan SOL Việt Nam
+                  Shinhan SOL Vietnam
                 </p>
               </div>
             </section>
@@ -78,10 +78,10 @@ export default function BankUI() {
             {/* Auth Actions */}
             <section className="px-6 -mt-6 relative z-10 grid grid-cols-2 gap-4">
               <button className="bg-secondary-container text-white py-4 rounded-xl font-bold text-sm shadow-lg hover:opacity-90 active:scale-95 transition-all">
-                ĐĂNG NHẬP
+                LOGIN
               </button>
               <button className="bg-[#00306b] text-white py-4 rounded-xl font-bold text-sm shadow-lg hover:opacity-90 active:scale-95 transition-all">
-                ĐĂNG KÝ
+                REGISTER
               </button>
             </section>
 
@@ -89,7 +89,7 @@ export default function BankUI() {
             <section className="mt-8 px-6">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-on-surface font-headline font-bold text-lg">
-                  Dịch vụ Ngân hàng
+                  Banking Services
                 </h2>
                 <span
                   className="material-symbols-outlined text-primary-container"
@@ -101,18 +101,18 @@ export default function BankUI() {
               </div>
               <div className="grid grid-cols-4 gap-y-8 gap-x-2">
                 {[
-                  { name: "Chuyển khoản", icon: "swap_horiz" },
-                  { name: "Tài khoản", icon: "account_balance" },
-                  { name: "Mở tài khoản", icon: "person_add" },
-                  { name: "Thanh toán", icon: "receipt_long" },
-                  { name: "Thẻ", icon: "credit_card" },
-                  { name: "Vay", icon: "real_estate_agent" },
-                  { name: "Rút tiền tại ATM", icon: "atm" },
-                  { name: "Ví điện tử", icon: "account_balance_wallet" },
-                  { name: "Đầu tư", icon: "trending_up" },
-                  { name: "Bảo hiểm số", icon: "verified_user" },
-                  { name: "Quản lý nhóm", icon: "groups" },
-                  { name: "Ngoại hối", icon: "currency_exchange" },
+                  { name: "Transfer", icon: "swap_horiz" },
+                  { name: "Account", icon: "account_balance" },
+                  { name: "Open Account", icon: "person_add" },
+                  { name: "Payments", icon: "receipt_long" },
+                  { name: "Cards", icon: "credit_card" },
+                  { name: "Loans", icon: "real_estate_agent" },
+                  { name: "ATM Withdrawals", icon: "atm" },
+                  { name: "E-Wallet", icon: "account_balance_wallet" },
+                  { name: "Investments", icon: "trending_up" },
+                  { name: "Digital Insurance", icon: "verified_user" },
+                  { name: "Group Settings", icon: "groups" },
+                  { name: "FX Trading", icon: "currency_exchange" },
                 ].map((service, idx) => (
                   <div
                     key={idx}
@@ -145,10 +145,10 @@ export default function BankUI() {
                 />
                 <div className="p-4">
                   <p className="text-xs font-bold text-primary mb-1">
-                    CHƯƠNG TRÌNH MỚI
+                    NEW PROMOTION
                   </p>
                   <p className="text-on-surface font-semibold text-sm">
-                    Ưu đãi vay tiêu dùng lãi suất cực thấp chỉ từ 5.9%/năm
+                    Special consumer loan rate starting from 5.9%/year
                   </p>
                 </div>
               </div>
@@ -156,8 +156,8 @@ export default function BankUI() {
           </>
         )}
 
-        {/* CHÍNH: TRỢ LÝ AI (Canvas UI Overlay) */}
-        {activeTab === "Trợ lý AI" && (
+        {/* MAIN: AI ADVISOR OVERLAY */}
+        {activeTab === "AI Advisor" && (
           <div className="w-full flex flex-col justify-end p-4 pb-28 min-h-[calc(100vh-64px)] relative z-20">
             {/* The 3D avatar handles its own transparent background via <AiAssistantWidget/> overlay */}
             <AiAssistantWidget
@@ -168,24 +168,24 @@ export default function BankUI() {
           </div>
         )}
 
-        {/* Tab: Thông tin (Tin tức) */}
-        {activeTab === 'Thông tin' && (
+        {/* Tab: Information */}
+        {activeTab === 'Information' && (
           <div className="w-full relative z-10 px-6 mt-6 pb-28">
             <div className="flex justify-between items-end mb-4">
-              <h2 className="text-xl font-bold text-primary tracking-tight">Khuyến mãi</h2>
-              <button className="text-sm font-semibold text-secondary hover:opacity-80 transition-opacity">Hiển thị thêm</button>
+              <h2 className="text-xl font-bold text-primary tracking-tight">Promotions</h2>
+              <button className="text-sm font-semibold text-secondary hover:opacity-80 transition-opacity">Show more</button>
             </div>
             
             <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#6a5acd] to-[#483d8b] shadow-xl group cursor-pointer aspect-[16/9]">
               <img alt="" className="absolute inset-0 w-full h-full object-cover mix-blend-overlay opacity-40" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAb8O7Ax_sT9BWqI5334wInnhHgqf0Gm_9W_pWubUpnUhS3kxhLYRNQ_W1ImCBxEymuUg2GuFGBoA5C48yo4LZkVP-mOIlCzCdDmgm6yF84wQTs-Ak344uoSok4_dEJbCfK6jEHYx8EctntQtbm2Lhm7Setjz7mykGib9BxTzMiwsBhhCCvreCs96lJQ5NnBnrccrMryZS3V50fVRLTUEI2dgTmd5M9rUD1IsPhYM4RfmCupJ3tYxTAu_OJGhODGs9UNzZB4N8ZdMPh"/>
               <div className="absolute inset-0 p-6 flex flex-col justify-between z-10">
                 <div className="max-w-[70%]">
-                  <span className="inline-block px-2 py-1 rounded bg-white/20 backdrop-blur-md text-[10px] font-bold text-white uppercase tracking-widest mb-2">Ưu đãi độc quyền</span>
-                  <h3 className="text-lg font-extrabold text-white leading-tight uppercase">CẦN TIỀN MẶT? RÚT NGAY TỪ THẺ TÍN DỤNG SHINHAN</h3>
+                  <span className="inline-block px-2 py-1 rounded bg-white/20 backdrop-blur-md text-[10px] font-bold text-white uppercase tracking-widest mb-2">Exclusive Offer</span>
+                  <h3 className="text-lg font-extrabold text-white leading-tight uppercase">NEED CASH? WITHDRAW NOW FROM YOUR SHINHAN CREDIT CARD</h3>
                 </div>
                 <div className="flex justify-between items-end">
                   <div className="bg-black/20 backdrop-blur-sm rounded-lg px-3 py-1.5">
-                    <p className="text-[10px] text-white/80 font-medium">Thời hạn chương trình</p>
+                    <p className="text-[10px] text-white/80 font-medium">Promotion period</p>
                     <p className="text-xs text-white font-bold">16/03/2026 - 16/04/2026</p>
                   </div>
                   <div className="w-20 h-20 -mb-2">
@@ -195,14 +195,14 @@ export default function BankUI() {
               </div>
             </div>
 
-            <h2 className="text-xl font-bold text-primary tracking-tight mb-6 mt-10">Tin tức &amp; Giải trí</h2>
+            <h2 className="text-xl font-bold text-primary tracking-tight mb-6 mt-10">News &amp; Entertainment</h2>
             <div className="grid grid-cols-2 gap-4">
               {[
-                { title: 'Tin tức Shinhan', icon: 'newspaper', colorClass: 'text-[#004695]', bgClass: 'bg-blue-50' },
-                { title: 'Mua sắm hoàn tiền', icon: 'shopping_bag', colorClass: 'text-orange-500', bgClass: 'bg-orange-50' },
-                { title: 'Công cụ tài chính', icon: 'calculate', colorClass: 'text-green-600', bgClass: 'bg-green-50' },
-                { title: 'Đặt chỗ & Đi lại', icon: 'directions_bus', colorClass: 'text-cyan-600', bgClass: 'bg-cyan-50' },
-                { title: 'Đặc quyền ưu đãi', icon: 'workspace_premium', colorClass: 'text-purple-600', bgClass: 'bg-purple-50' },
+                { title: 'Shinhan News', icon: 'newspaper', colorClass: 'text-[#004695]', bgClass: 'bg-blue-50' },
+                { title: 'Cashback Shopping', icon: 'shopping_bag', colorClass: 'text-orange-500', bgClass: 'bg-orange-50' },
+                { title: 'Financial Tools', icon: 'calculate', colorClass: 'text-green-600', bgClass: 'bg-green-50' },
+                { title: 'Booking & Travel', icon: 'directions_bus', colorClass: 'text-cyan-600', bgClass: 'bg-cyan-50' },
+                { title: 'Privileges', icon: 'workspace_premium', colorClass: 'text-purple-600', bgClass: 'bg-purple-50' },
                 { title: 'Vietlott SMS', icon: 'confirmation_number', colorClass: 'text-red-600', bgClass: 'bg-red-50' }
               ].map((item, idx) => (
                 <div key={idx} className="col-span-1 bg-surface-container-lowest p-5 rounded-2xl flex flex-col items-center justify-center text-center transition-transform active:scale-95 shadow-sm hover:shadow-md border border-outline-variant/10">
@@ -219,15 +219,15 @@ export default function BankUI() {
                 <span className="material-symbols-outlined text-primary text-3xl">security</span>
               </div>
               <div>
-                <h4 className="font-bold text-primary">Ngân hàng an toàn</h4>
-                <p className="text-xs text-on-surface-variant leading-relaxed">Cập nhật các phương thức bảo mật mới nhất để bảo vệ tài khoản của bạn.</p>
+                <h4 className="font-bold text-primary">Secure Banking</h4>
+                <p className="text-xs text-on-surface-variant leading-relaxed">Update the latest security methods to protect your account effectively.</p>
               </div>
             </div>
           </div>
         )}
 
-        {/* Các Tab Khác */}
-        {["QR", "Cài đặt"].includes(activeTab) && (
+        {/* Other Tabs */}
+        {["QR", "Settings"].includes(activeTab) && (
           <div className="flex flex-col items-center justify-center p-8 mt-20 opacity-60">
             <span
               className="material-symbols-outlined text-6xl text-primary mb-4"
@@ -236,10 +236,10 @@ export default function BankUI() {
               construction
             </span>
             <h2 className="text-xl font-headline font-bold text-on-surface">
-              Tính năng {activeTab}
+              {activeTab} Feature
             </h2>
             <p className="text-sm font-body mt-2 text-center text-on-surface-variant">
-              Đang trong quá trình phát triển và hoàn thiện.
+              Currently under development and optimization.
             </p>
           </div>
         )}
@@ -255,40 +255,40 @@ export default function BankUI() {
         }}
       >
         <div
-          onClick={() => setActiveTab("Trang chủ")}
-          className={`flex flex-col items-center justify-center rounded-2xl px-3 py-1.5 transition-transform duration-200 active:scale-90 cursor-pointer ${activeTab === "Trang chủ" ? "bg-[#f1f4f7] dark:bg-slate-800 text-[#004695] dark:text-blue-400" : "text-slate-500 hover:opacity-80"}`}
+          onClick={() => setActiveTab("Home")}
+          className={`flex flex-col items-center justify-center rounded-2xl px-3 py-1.5 transition-transform duration-200 active:scale-90 cursor-pointer ${activeTab === "Home" ? "bg-[#f1f4f7] dark:bg-slate-800 text-[#004695] dark:text-blue-400" : "text-slate-500 hover:opacity-80"}`}
         >
           <span
             className="material-symbols-outlined"
             data-icon="home"
             style={{
               fontVariationSettings:
-                activeTab === "Trang chủ" ? "'FILL' 1" : "",
+                activeTab === "Home" ? "'FILL' 1" : "",
             }}
           >
             home
           </span>
           <span className="text-[10px] font-medium font-headline mt-1">
-            Trang chủ
+            Home
           </span>
         </div>
 
         <div
-          onClick={() => setActiveTab("Thông tin")}
-          className={`flex flex-col items-center justify-center rounded-2xl px-3 py-1.5 transition-transform duration-200 active:scale-90 cursor-pointer ${activeTab === "Thông tin" ? "bg-[#f1f4f7] dark:bg-slate-800 text-[#004695] dark:text-blue-400" : "text-slate-500 hover:opacity-80"}`}
+          onClick={() => setActiveTab("Information")}
+          className={`flex flex-col items-center justify-center rounded-2xl px-3 py-1.5 transition-transform duration-200 active:scale-90 cursor-pointer ${activeTab === "Information" ? "bg-[#f1f4f7] dark:bg-slate-800 text-[#004695] dark:text-blue-400" : "text-slate-500 hover:opacity-80"}`}
         >
           <span
             className="material-symbols-outlined"
             data-icon="account_balance_wallet"
             style={{
               fontVariationSettings:
-                activeTab === "Thông tin" ? "'FILL' 1" : "",
+                activeTab === "Information" ? "'FILL' 1" : "",
             }}
           >
             account_balance_wallet
           </span>
           <span className="text-[10px] font-medium font-headline mt-1">
-            Thông tin
+            Information
           </span>
         </div>
 
@@ -309,39 +309,39 @@ export default function BankUI() {
         </div>
 
         <div
-          onClick={() => setActiveTab("Trợ lý AI")}
-          className={`flex flex-col items-center justify-center rounded-2xl px-3 py-1.5 transition-transform duration-200 active:scale-90 cursor-pointer ${activeTab === "Trợ lý AI" ? "bg-[#f1f4f7] dark:bg-slate-800 text-[#004695] dark:text-blue-400" : "text-slate-500 hover:opacity-80"}`}
+          onClick={() => setActiveTab("AI Advisor")}
+          className={`flex flex-col items-center justify-center rounded-2xl px-3 py-1.5 transition-transform duration-200 active:scale-90 cursor-pointer ${activeTab === "AI Advisor" ? "bg-[#f1f4f7] dark:bg-slate-800 text-[#004695] dark:text-blue-400" : "text-slate-500 hover:opacity-80"}`}
         >
           <span
             className="material-symbols-outlined"
             data-icon="contact_support"
             style={{
               fontVariationSettings:
-                activeTab === "Trợ lý AI" ? "'FILL' 1" : "",
+                activeTab === "AI Advisor" ? "'FILL' 1" : "",
             }}
           >
             support_agent
           </span>
           <span className="text-[10px] font-medium font-headline mt-1">
-            Trợ lý AI
+            Advisor
           </span>
         </div>
 
         <div
-          onClick={() => setActiveTab("Cài đặt")}
-          className={`flex flex-col items-center justify-center rounded-2xl px-3 py-1.5 transition-transform duration-200 active:scale-90 cursor-pointer ${activeTab === "Cài đặt" ? "bg-[#f1f4f7] dark:bg-slate-800 text-[#004695] dark:text-blue-400" : "text-slate-500 hover:opacity-80"}`}
+          onClick={() => setActiveTab("Settings")}
+          className={`flex flex-col items-center justify-center rounded-2xl px-3 py-1.5 transition-transform duration-200 active:scale-90 cursor-pointer ${activeTab === "Settings" ? "bg-[#f1f4f7] dark:bg-slate-800 text-[#004695] dark:text-blue-400" : "text-slate-500 hover:opacity-80"}`}
         >
           <span
             className="material-symbols-outlined"
             data-icon="settings"
             style={{
-              fontVariationSettings: activeTab === "Cài đặt" ? "'FILL' 1" : "",
+              fontVariationSettings: activeTab === "Settings" ? "'FILL' 1" : "",
             }}
           >
             settings
           </span>
           <span className="text-[10px] font-medium font-headline mt-1">
-            Cài đặt
+            Settings
           </span>
         </div>
       </nav>

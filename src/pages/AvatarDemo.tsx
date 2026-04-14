@@ -91,13 +91,13 @@ export default function AvatarDemo() {
         if (audioContextRef.current?.state === 'suspended') {
             audioContextRef.current.resume();
         }
-        audioRef.current.src = `/tts?client=gtx&ie=UTF-8&tl=vi&q=${encodeURIComponent(text)}`;
+        audioRef.current.src = `/tts?client=gtx&ie=UTF-8&tl=en&q=${encodeURIComponent(text)}`;
         audioRef.current.play();
     }
   };
 
   const handleSpeakClick = () => {
-    speakText('Chào bạn! Tôi phát hiện bạn vừa giao dịch tại Traveloka. Bạn có muốn kích hoạt bảo hiểm du lịch Shinhan Gold không?');
+    speakText('Hello! I detected you just made a transaction at Traveloka. Would you like to activate Shinhan Gold travel insurance?');
     setTriggerCount(c => c + 1);
   };
 
@@ -118,17 +118,17 @@ export default function AvatarDemo() {
             <div className="avatar-indicator"></div>
             <div className="advisor-name">SHINHAN AI ADVISOR</div>
           </div>
-          <div className="advisor-text">{textToSpeak || 'Chào bạn. Tôi có thể giúp gì?'}</div>
+          <div className="advisor-text">{textToSpeak || 'Hello. How can I assist you?'}</div>
           <div className="btn-group">
-            <button className="btn" onClick={handleWaveClick}>Vẫy tay</button>
-            <button className="btn btn-outline" onClick={() => { setTextToSpeak(''); audioRef.current?.pause(); }}>Bỏ qua</button>
+            <button className="btn" onClick={handleWaveClick}>Wave</button>
+            <button className="btn btn-outline" onClick={() => { setTextToSpeak(''); audioRef.current?.pause(); }}>Skip</button>
           </div>
         </div>
 
         <div className="input-bar">
           <input 
             type="text" 
-            placeholder="Nhập text để avatar nói..." 
+            placeholder="Type text for avatar to speak..." 
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 speakText(e.currentTarget.value);
@@ -144,7 +144,7 @@ export default function AvatarDemo() {
                 setTriggerCount(c => c + 1);
                 input.value = '';
             }
-          }}>Gửi</button>
+          }}>Send</button>
         </div>
       </div>
 
@@ -182,7 +182,7 @@ export default function AvatarDemo() {
 
         <Suspense fallback={null}>
           <DigitalAvatar 
-            url="/Avatar.vrm" 
+            url="/Test.vrm" 
             textToSpeak={textToSpeak}
             triggerCount={triggerCount}
             analyserRef={analyserRef}

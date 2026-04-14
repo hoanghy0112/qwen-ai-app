@@ -21,6 +21,11 @@ export default defineConfig({
             proxyReq.setHeader('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)');
           });
         }
+      },
+      '/api/cosyvoice': {
+        target: 'http://localhost:5000',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/cosyvoice/, '/tts')
       }
     }
   },

@@ -67,23 +67,26 @@ const animationMotions = {
 export default function DigitalAvatar({
   url,
   textToSpeak,
+  isSpeaking,
   triggerCount,
   analyserRef,
   disableTracking,
 }: {
   url: string;
   textToSpeak: string;
+  isSpeaking: boolean;
   triggerCount: number;
   analyserRef?: React.RefObject<AnalyserNode | null>;
   disableTracking?: boolean;
 }) {
   const [, vrm] = useVRMModel(url);
-
   if (!vrm) return null;
+
   return (
     <DigitalAvatarInner
       vrm={vrm}
       textToSpeak={textToSpeak}
+      isSpeaking={isSpeaking}
       triggerCount={triggerCount}
       analyserRef={analyserRef}
       disableTracking={disableTracking}
@@ -94,12 +97,14 @@ export default function DigitalAvatar({
 function DigitalAvatarInner({
   vrm,
   textToSpeak,
+  isSpeaking,
   triggerCount,
   analyserRef,
   disableTracking,
 }: {
   vrm: any;
   textToSpeak: string;
+  isSpeaking: boolean;
   triggerCount: number;
   analyserRef?: React.RefObject<AnalyserNode | null>;
   disableTracking?: boolean;
@@ -151,7 +156,7 @@ function DigitalAvatarInner({
 
     let targetAction: THREE.AnimationAction | undefined;
 
-    if (textToSpeak) {
+    if (isSpeaking) {
       avatarState = "talking";
       currentMood = "talking";
       moodTransition = 1;
@@ -174,6 +179,7 @@ function DigitalAvatarInner({
       }
       send({ happy: { value: 1, hold: 2, decay: 0.5 } });
     } else {
+      avatarState = "pausing";
       targetAction = actions.idle;
     }
 
@@ -197,7 +203,7 @@ function DigitalAvatarInner({
           targetAction?.getMixer().removeEventListener("finished", onFinished);
       }
     }
-  }, [textToSpeak, triggerCount, vrm, send, actions]);
+  }, [isSpeaking, triggerCount, vrm, send, actions]);
 
   useFrame((state, delta) => {
     if (!vrm) return;

@@ -8,7 +8,7 @@ function Loader() {
   return (
     <Html center>
       <div style={{ color: '#0046ff', fontWeight: '600', whiteSpace: 'nowrap', fontFamily: 'Outfit', background: 'rgba(255,255,255,0.8)', padding: '8px 16px', borderRadius: '20px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
-        Đang nạp dữ liệu Model 3D: {progress.toFixed(0)}%
+        Loading 3D Model Data: {progress.toFixed(0)}%
       </div>
     </Html>
   );
@@ -26,6 +26,7 @@ function CameraSetup() {
 
 export default function AiAssistantWidget({ textToSpeak, onAudioEnd, onTextInput }: { textToSpeak: string, onAudioEnd?: () => void, onTextInput?: (t: string) => void }) {
   const [triggerCount, setTriggerCount] = useState(0);
+  const [isActuallyTalking, setIsActuallyTalking] = useState(false);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
@@ -35,11 +36,16 @@ export default function AiAssistantWidget({ textToSpeak, onAudioEnd, onTextInput
     const audio = new Audio();
     audio.crossOrigin = "anonymous";
     audio.onended = () => {
+        setIsActuallyTalking(false);
         if (onAudioEnd) onAudioEnd();
+    };
+    audio.onpause = () => {
+        setIsActuallyTalking(false);
     };
     audioRef.current = audio;
 
     const handlePlay = () => {
+        setIsActuallyTalking(true);
         if (!audioContextRef.current) {
             const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
             audioContextRef.current = new AudioContext();
@@ -51,8 +57,12 @@ export default function AiAssistantWidget({ textToSpeak, onAudioEnd, onTextInput
             analyserRef.current.connect(audioContextRef.current.destination);
         }
     };
-    audio.addEventListener('play', handlePlay);
-    return () => { audio.removeEventListener('play', handlePlay); audio.pause(); }
+    audio.addEventListener('playing', handlePlay);
+    return () => { 
+        audio.removeEventListener('playing', handlePlay); 
+        audio.pause();
+        setIsActuallyTalking(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -60,8 +70,17 @@ export default function AiAssistantWidget({ textToSpeak, onAudioEnd, onTextInput
         if (audioContextRef.current?.state === 'suspended') {
             audioContextRef.current.resume();
         }
-        audioRef.current.src = `/tts?client=gtx&ie=UTF-8&tl=vi&q=${encodeURIComponent(textToSpeak)}`;
-        audioRef.current.play();
+        
+        const dashscopeKey = import.meta.env.VITE_DASHSCOPE_API_KEY;
+        if (dashscopeKey) {
+            // Use the Python Proxy Server running locally on port 5000
+            audioRef.current.src = `/api/cosyvoice?q=${encodeURIComponent(textToSpeak)}`;
+            audioRef.current.play().catch(e => console.error("Audio playback failed:", e));
+        } else {
+            // Fallback to Google Translate TTS
+            audioRef.current.src = `/tts?client=gtx&ie=UTF-8&tl=en&q=${encodeURIComponent(textToSpeak)}`;
+            audioRef.current.play().catch(e => console.error("Audio playback failed:", e));
+        }
     } else if (!textToSpeak && audioRef.current) {
         audioRef.current.pause();
     }
@@ -92,6 +111,7 @@ export default function AiAssistantWidget({ textToSpeak, onAudioEnd, onTextInput
               <DigitalAvatar 
                 url="/Test.vrm" 
                 textToSpeak={textToSpeak}
+                isSpeaking={isActuallyTalking}
                 triggerCount={triggerCount}
                 analyserRef={analyserRef}
                 disableTracking={true}
@@ -110,7 +130,7 @@ export default function AiAssistantWidget({ textToSpeak, onAudioEnd, onTextInput
       <div style={{ marginTop: '16px', display: 'flex', gap: '8px', zIndex: 10 }}>
         <input 
           type="text" 
-          placeholder="Nhập để hỏi Trợ lý Shinhan AI..." 
+          placeholder="Type to ask Shinhan AI Advisor..." 
           onKeyDown={(e) => {
             if (e.key === 'Enter' && onTextInput) {
               onTextInput(e.currentTarget.value);
