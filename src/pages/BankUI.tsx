@@ -1,15 +1,17 @@
 import React, { useState } from "react";
 import AiAssistantWidget from "../components/AiAssistantWidget";
+import TransferUI from "../components/TransferUI";
 
 export default function BankUI() {
   const [notification, setNotification] = useState("");
   const [activeTab, setActiveTab] = useState("Home");
 
   const handleServiceClick = (serviceName: string) => {
-    setNotification(
-      `You selected ${serviceName}. Do you need instructions or further assistance?`,
-    );
-    setActiveTab("AI Advisor");
+    if (serviceName === "Transfer") {
+      setActiveTab("Transfer");
+      return;
+    }
+    // Other services are currently disabled per user request
   };
 
   return (
@@ -56,6 +58,18 @@ export default function BankUI() {
 
       {/* DYNAMIC TAB CONTENT */}
       <main className="w-full">
+        {/* MAIN: TRANSFER UI */}
+        {activeTab === "Transfer" && (
+          <TransferUI 
+            onBack={() => setActiveTab("Home")} 
+            onSuccessReturnHome={() => setActiveTab("Home")} 
+            onOpenAdvisor={(msg) => {
+              setNotification(msg);
+              setActiveTab("AI Advisor");
+            }}
+          />
+        )}
+
         {activeTab === "Home" && (
           <>
             {/* Hero Section & Greeting */}

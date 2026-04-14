@@ -40,5 +40,5 @@ public/Avatar_old.vrm
 # public/animations/ <- Bỏ comment/Xóa dòng này để đẩy animation lên
 
 # Các folder nháp
-animations/
+# animations/
 stitch_exports/
