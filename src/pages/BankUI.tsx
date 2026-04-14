@@ -1,14 +1,25 @@
 import React, { useState } from "react";
 import AiAssistantWidget from "../components/AiAssistantWidget";
 import TransferUI from "../components/TransferUI";
+import AccountUI from "../components/AccountUI";
 
 export default function BankUI() {
   const [notification, setNotification] = useState("");
   const [activeTab, setActiveTab] = useState("Home");
+  const [showPaymentMenu, setShowPaymentMenu] = useState(false);
+  const [balance, setBalance] = useState(15000000);
 
   const handleServiceClick = (serviceName: string) => {
     if (serviceName === "Transfer") {
       setActiveTab("Transfer");
+      return;
+    }
+    if (serviceName === "Account") {
+      setActiveTab("Account");
+      return;
+    }
+    if (serviceName === "Payments") {
+      setShowPaymentMenu(true);
       return;
     }
     // Other services are currently disabled per user request
@@ -67,6 +78,16 @@ export default function BankUI() {
               setNotification(msg);
               setActiveTab("AI Advisor");
             }}
+            balance={balance}
+            setBalance={setBalance}
+          />
+        )}
+
+        {/* MAIN: ACCOUNT UI */}
+        {activeTab === "Account" && (
+          <AccountUI 
+            onBack={() => setActiveTab("Home")} 
+            balance={balance}
           />
         )}
 
@@ -359,6 +380,78 @@ export default function BankUI() {
           </span>
         </div>
       </nav>
+
+      {/* Payment Menu Bottom Sheet */}
+      {showPaymentMenu && (
+        <div className="fixed inset-0 z-[200] flex flex-col justify-end pointer-events-auto">
+          <style>{`
+            @keyframes sheetSlideUp {
+              from { transform: translateY(100%); }
+              to { transform: translateY(0); }
+            }
+            .animate-sheet-slide-up {
+              animation: sheetSlideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            }
+            @keyframes backdropFadeIn {
+              from { opacity: 0; }
+              to { opacity: 1; }
+            }
+            .animate-backdrop-fade-in {
+              animation: backdropFadeIn 0.3s ease-out forwards;
+            }
+          `}</style>
+          
+          {/* Backdrop */}
+          <div 
+            className="absolute inset-0 bg-black/40 animate-backdrop-fade-in" 
+            onClick={() => setShowPaymentMenu(false)}
+          ></div>
+          
+          {/* Bottom Sheet */}
+          <div className="bg-white w-full rounded-t-3xl relative z-10 flex flex-col max-h-[85vh] animate-sheet-slide-up" style={{ maxWidth: '480px', margin: '0 auto' }}>
+            {/* Header */}
+            <div className="flex items-center justify-between p-5 border-b border-gray-100 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="bg-red-50 p-2 rounded-lg flex items-center justify-center">
+                  <span className="material-symbols-outlined text-red-500 font-bold" style={{fontSize: '22px'}}>receipt_long</span>
+                </div>
+                <h2 className="text-[20px] font-extrabold text-gray-800 tracking-tight">Payments</h2>
+              </div>
+              <button 
+                onClick={() => setShowPaymentMenu(false)}
+                className="hover:bg-gray-100 p-1.5 rounded-full transition-colors flex items-center justify-center"
+              >
+                <span className="material-symbols-outlined text-gray-800 font-extrabold text-xl">close</span>
+              </button>
+            </div>
+
+            {/* Menu List */}
+            <div className="overflow-y-auto pt-2 pb-8 flex-1 bg-gray-50/50">
+              {[
+                { title: 'Saved Bills', icon: 'electric_bolt' },
+                { title: 'Bill Payment', icon: 'receipt_long' },
+                { title: 'Mobile Top-up', icon: 'arrow_circle_up' },
+                { title: 'Tuition Fee', icon: 'school' },
+                { title: 'Auto Bill Payment', icon: 'event_note' },
+                { title: 'NAPAS Online Payment', icon: 'shopping_cart' },
+                { title: 'Payment Management', icon: 'settings' },
+                { title: 'Direct Debit Service', icon: 'assignment' },
+              ].map((item, idx) => (
+                <div 
+                  key={idx}
+                  className="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-gray-100 active:bg-gray-200 transition-colors border-b border-gray-100/50 last:border-0"
+                >
+                  <div className="flex items-center gap-4">
+                    <span className="material-symbols-outlined text-[#3d5a80] text-[26px]" style={{fontVariationSettings: "'FILL' 1"}}>{item.icon}</span>
+                    <span className="text-[16px] font-bold text-gray-800">{item.title}</span>
+                  </div>
+                  <span className="material-symbols-outlined text-gray-400 font-bold text-xl">chevron_right</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

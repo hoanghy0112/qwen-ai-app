@@ -4,10 +4,12 @@ interface TransferUIProps {
   onBack: () => void;
   onSuccessReturnHome: () => void;
   onOpenAdvisor: (message: string) => void;
+  balance: number;
+  setBalance: React.Dispatch<React.SetStateAction<number>>;
 }
 
-export default function TransferUI({ onBack, onSuccessReturnHome, onOpenAdvisor }: TransferUIProps) {
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+export default function TransferUI({ onBack, onSuccessReturnHome, onOpenAdvisor, balance, setBalance }: TransferUIProps) {
+  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [amount, setAmount] = useState<string>('');
   const [content, setContent] = useState<string>('NGUYEN XUAN TRUNG TRANSFER');
   const [accountNo, setAccountNo] = useState<string>('');
@@ -16,14 +18,24 @@ export default function TransferUI({ onBack, onSuccessReturnHome, onOpenAdvisor 
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [showNotification, setShowNotification] = useState(false);
   const [generatedOtp, setGeneratedOtp] = useState('');
-  const [balance, setBalance] = useState(15000000);
+  const [countdown, setCountdown] = useState(59);
+  const [otpTrigger, setOtpTrigger] = useState(0);
   const [errorMsg, setErrorMsg] = useState('');
   const [showDeductedNotif, setShowDeductedNotif] = useState(false);
   const [showAvatarNotif, setShowAvatarNotif] = useState(false);
   const [allowTransition, setAllowTransition] = useState(false);
 
+  // Countdown Timer
   useEffect(() => {
-    if (step === 2) {
+    if (step === 3 && countdown > 0) {
+      const timer = setTimeout(() => setCountdown(c => c - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [step, countdown]);
+
+  useEffect(() => {
+    if (step === 3) {
+      setOtp(['', '', '', '', '', '']);
       const initTimer = setTimeout(() => setAllowTransition(true), 50);
       const randomOtp = Math.floor(100000 + Math.random() * 900000).toString();
       const notificationTimer = setTimeout(() => {
@@ -46,10 +58,10 @@ export default function TransferUI({ onBack, onSuccessReturnHome, onOpenAdvisor 
       setAllowTransition(false);
       return undefined;
     }
-  }, [step]);
+  }, [step, otpTrigger]);
 
   useEffect(() => {
-    if (step === 3) {
+    if (step === 4) {
       const initTimer = setTimeout(() => setAllowTransition(true), 50);
       const showTimer = setTimeout(() => {
         setShowDeductedNotif(true);
@@ -106,11 +118,24 @@ export default function TransferUI({ onBack, onSuccessReturnHome, onOpenAdvisor 
     setStep(2);
   };
 
+  const handleConfirmReview = () => {
+    setAllowTransition(false);
+    setCountdown(59);
+    setOtpTrigger(prev => prev + 1);
+    setStep(3);
+  };
+
+  const handleResendOtp = () => {
+    if (countdown > 0) return;
+    setCountdown(59);
+    setOtpTrigger(prev => prev + 1);
+  };
+
   const handleConfirmOtp = () => {
     const amountVal = parseFloat(amount.replace(/[^\d]/g, '')) || 0;
     setAllowTransition(false);
     setBalance(prev => prev - amountVal);
-    setStep(3);
+    setStep(4);
   };
 
   const handleOtpChange = (index: number, value: string) => {
@@ -279,6 +304,102 @@ export default function TransferUI({ onBack, onSuccessReturnHome, onOpenAdvisor 
 
   if (step === 2) {
     return (
+      <div className="absolute inset-0 bg-surface text-on-surface z-[100] flex flex-col font-body bg-[#f4f5f7] max-h-[100dvh]">
+        {/* Header */}
+        <div className="bg-[#2f66ee] text-white px-4 py-4 flex items-center justify-between shadow-sm sticky top-0 z-10 shrink-0">
+          <button onClick={() => setStep(1)} className="p-2 -ml-2 rounded-full hover:bg-white/10 transition-colors">
+            <span className="material-symbols-outlined font-bold text-xl">arrow_back_ios_new</span>
+          </button>
+          <h1 className="font-bold text-lg flex-1 text-center font-headline">Confirm</h1>
+          <button onClick={onSuccessReturnHome} className="p-2 -mr-2 rounded-full hover:bg-white/10 transition-colors">
+            <span className="material-symbols-outlined font-bold text-xl">home</span>
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto w-full pb-28 px-4 pt-4">
+           {/* DEBIT INFORMATION CARD */}
+           <div className="bg-white rounded-xl shadow-sm mb-4 overflow-hidden" style={{boxShadow: '0 2px 8px rgba(0,0,0,0.02)'}}>
+             <div className="bg-[#f8f9fc] px-4 py-3">
+               <h3 className="text-[12px] font-bold text-gray-700 tracking-wide uppercase">Debit Information</h3>
+             </div>
+             <div className="p-4 flex flex-col gap-4">
+               <div>
+                 <p className="text-gray-500 text-[12px] mb-0.5">From Account</p>
+                 <p className="font-bold text-gray-800 text-[14px]">700-031-586225</p>
+               </div>
+               <div>
+                 <p className="text-gray-500 text-[12px] mb-0.5">Sender Name</p>
+                 <p className="font-bold text-gray-800 text-[14px] uppercase">NGUYEN XUAN TRUNG</p>
+               </div>
+             </div>
+           </div>
+
+           {/* TRANSACTION INFORMATION CARD */}
+           <div className="bg-white rounded-xl shadow-sm mb-6 overflow-hidden" style={{boxShadow: '0 2px 8px rgba(0,0,0,0.02)'}}>
+             <div className="bg-[#f8f9fc] px-4 py-3">
+               <h3 className="text-[12px] font-bold text-gray-700 tracking-wide uppercase">Transaction Information</h3>
+             </div>
+             <div className="p-4 flex flex-col gap-4">
+               <div className="flex justify-between items-center">
+                 <div>
+                   <p className="text-gray-500 text-[12px] mb-0.5">To Account</p>
+                   <p className="font-bold text-gray-800 text-[14px]">{accountNo || "0785656734"}</p>
+                 </div>
+                 <button className="flex items-center gap-1 px-3 py-1.5 border border-[#2f66ee] rounded-full text-[#2f66ee] hover:bg-blue-50 transition-all">
+                   <span className="material-symbols-outlined text-[14px] font-bold" style={{fontVariationSettings: "'FILL' 1"}}>add_circle</span>
+                   <span className="text-[12px] font-bold">Save Account</span>
+                 </button>
+               </div>
+
+               <div>
+                 <p className="text-gray-500 text-[12px] mb-0.5">Bank</p>
+                 <p className="font-bold text-gray-800 text-[14px]">Shinhan Bank Vietnam</p>
+               </div>
+
+               <div>
+                 <p className="text-gray-500 text-[12px] mb-0.5">Recipient Name</p>
+                 <p className="font-bold text-gray-800 text-[14px] uppercase">NGUYEN XUAN TRUNG</p>
+               </div>
+
+               <div>
+                 <p className="text-gray-500 text-[12px] mb-1">Transfer Amount</p>
+                 <div className="flex items-center gap-2">
+                   <span className="font-bold text-[10px] bg-[#eef3ff] text-[#2f66ee] px-2 py-0.5 rounded-full uppercase">VND</span>
+                   <p className="font-bold text-gray-800 text-[15px]">{amount || "100.000"}</p>
+                 </div>
+               </div>
+
+               <div>
+                 <p className="text-gray-500 text-[12px] mb-1">Transaction Fee</p>
+                 <div className="flex items-center gap-2">
+                   <span className="font-bold text-[10px] bg-[#eef3ff] text-[#2f66ee] px-2 py-0.5 rounded-full uppercase">VND</span>
+                   <p className="font-bold text-gray-800 text-[15px]">0</p>
+                 </div>
+               </div>
+
+               <div>
+                 <p className="text-gray-500 text-[12px] mb-0.5">Memo</p>
+                 <p className="font-bold text-gray-800 text-[14px] break-words uppercase">{content}</p>
+               </div>
+             </div>
+           </div>
+        </div>
+
+        {/* Fixed Continue Button */}
+        <div className="fixed bottom-0 left-0 w-full p-4 bg-white pb-6 shrink-0 z-20 shadow-[0_-10px_20px_-5px_rgba(0,0,0,0.05)] border-t border-gray-100" style={{ maxWidth: '480px', transform: 'translateX(-50%)', left: '50%' }}>
+          <button 
+            onClick={handleConfirmReview}
+            className="w-full bg-[#2f66ee] text-white font-bold py-3.5 rounded-xl shadow-md hover:opacity-95 active:scale-[0.98] transition-all text-[15px]"
+          >
+            Confirm
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (step === 3) {
+    return (
         <div className="absolute inset-0 bg-surface text-on-surface z-[100] flex flex-col font-body bg-white pb-6 max-h-[100dvh] overflow-hidden">
           {/* Notification Toast */}
           <div className={`absolute top-4 left-4 right-4 bg-white/95 backdrop-blur-xl rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-gray-100 p-4 transform ${allowTransition ? 'transition-all duration-500' : ''} z-[200] ${showNotification ? 'translate-y-0 opacity-100' : '-translate-y-[150%] opacity-0 pointer-events-none'}`}>
@@ -300,7 +421,7 @@ export default function TransferUI({ onBack, onSuccessReturnHome, onOpenAdvisor 
 
           {/* Header */}
           <div className="bg-[#2f66ee] text-white px-4 py-4 flex items-center shadow-sm shrink-0">
-            <button onClick={() => setStep(1)} className="p-2 -ml-2 rounded-full hover:bg-white/10 transition-colors">
+            <button onClick={() => setStep(2)} className="p-2 -ml-2 rounded-full hover:bg-white/10 transition-colors">
               <span className="material-symbols-outlined text-xl font-bold">arrow_back_ios_new</span>
             </button>
             <h1 className="font-bold text-lg font-headline flex-1 text-center pr-8">Transaction Authentication</h1>
@@ -330,7 +451,13 @@ export default function TransferUI({ onBack, onSuccessReturnHome, onOpenAdvisor 
               ))}
             </div>
 
-            <button className="text-sm font-bold text-[#2f66ee] active:opacity-70 transition-opacity">Resend OTP (59s)</button>
+            <button 
+                onClick={handleResendOtp}
+                disabled={countdown > 0}
+                className={`text-sm font-bold transition-opacity ${countdown > 0 ? 'text-gray-400 cursor-not-allowed' : 'text-[#2f66ee] active:opacity-70'}`}
+            >
+                {countdown > 0 ? `Resend OTP (${countdown}s)` : 'Resend OTP'}
+            </button>
           </div>
 
           <div className="px-4 mt-auto mb-4 w-full" style={{ maxWidth: '480px', margin: '0 auto' }}>
@@ -345,7 +472,7 @@ export default function TransferUI({ onBack, onSuccessReturnHome, onOpenAdvisor 
     );
   }
 
-  if (step === 3) {
+  if (step === 4) {
     return (
         <div className="absolute inset-0 bg-surface text-on-surface z-[100] flex flex-col font-body bg-gray-50 pb-6 max-h-[100dvh] overflow-hidden">
           {/* Avatar Notification Toast */}
