@@ -1,0 +1,255 @@
+:root {
+  --shinhan-blue: #0b49cd;
+  --shinhan-bg: #f5f6f8;
+  --shinhan-card: #ffffff;
+  --text-main: #333333;
+  --text-muted: #888888;
+  --border-color: #eaeaea;
+}
+
+body, html {
+  margin: 0;
+  padding: 0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  background-color: var(--shinhan-bg);
+  color: var(--text-main);
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Mobile Wrapper for PWA feel on Desktop */
+.pwa-wrapper {
+  max-width: 420px;
+  margin: 0 auto;
+  min-height: 100vh;
+  background: var(--shinhan-bg);
+  position: relative;
+  box-shadow: 0 0 20px rgba(0,0,0,0.05);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.bank-header {
+  background-color: var(--shinhan-blue);
+  color: white;
+  padding: 16px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.header-icons {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.logo-center {
+  font-weight: 700;
+  font-size: 1.2rem;
+  letter-spacing: -0.5px;
+}
+
+.header-welcome h2 {
+  margin: 0 0 8px 0;
+  font-size: 1.1rem;
+  font-weight: 500;
+}
+
+.header-welcome h1 {
+  margin: 0 0 20px 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.login-btn-group {
+  display: flex;
+  gap: 12px;
+}
+
+.btn-header {
+  flex: 1;
+  padding: 12px;
+  border-radius: 8px;
+  border: none;
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.btn-login {
+  background-color: rgba(255, 255, 255, 0.2);
+  color: white;
+}
+
+.btn-register {
+  background-color: #1a3296;
+  color: white;
+}
+
+.content-section {
+  padding: 20px 16px;
+  flex: 1;
+  padding-bottom: 80px; /* Space for bottom nav */
+}
+
+.section-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin: 0 0 16px 0;
+}
+
+.service-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.service-card {
+  background: var(--shinhan-card);
+  border-radius: 12px;
+  padding: 16px 12px;
+  display: flex;
+  flex-direction: column;
+  min-height: 110px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+  cursor: pointer;
+  position: relative;
+  transition: transform 0.1s;
+}
+.service-card:active {
+  transform: scale(0.97);
+}
+
+.service-card h3 {
+  margin: 0 0 4px 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.service-card p {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  line-height: 1.2;
+}
+
+.service-icon {
+  margin-top: auto;
+  align-self: flex-end;
+  font-size: 1.5rem;
+}
+
+.bottom-nav {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: white;
+  display: flex;
+  justify-content: space-around;
+  padding: 12px 0;
+  border-top: 1px solid var(--border-color);
+  z-index: 20;
+}
+
+.nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.nav-item.active {
+  color: var(--shinhan-blue);
+}
+
+.qr-btn {
+  background: var(--shinhan-blue);
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  margin-top: -8px;
+  box-shadow: 0 4px 10px rgba(11, 73, 205, 0.3);
+}
+
+/* AI Assistant Widget */
+.ai-widget-container {
+  position: absolute;
+  bottom: 80px;
+  right: 16px;
+  width: 140px;
+  height: 180px;
+  z-index: 100;
+  pointer-events: none;
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.ai-widget-container.expanded {
+  width: 100%;
+  right: 0;
+  bottom: 60px;
+  height: 300px;
+}
+
+.ai-canvas-wrapper {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  pointer-events: auto;
+  border-radius: 20px;
+  overflow: hidden;
+  background: transparent;
+}
+
+.ai-speech-bubble {
+  position: absolute;
+  bottom: 100%;
+  right: 0;
+  background: white;
+  border-radius: 16px 16px 0 16px;
+  padding: 12px 16px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-main);
+  box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+  margin-bottom: -10px;
+  pointer-events: auto;
+  max-width: 250px;
+  line-height: 1.4;
+  opacity: 0;
+  transform: translateY(10px) scale(0.9);
+  transition: all 0.3s ease;
+  transform-origin: bottom right;
+}
+
+.ai-speech-bubble.visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.ai-speech-bubble::after {
+  content: '';
+  position: absolute;
+  bottom: -10px;
+  right: 10px;
+  border-width: 10px 10px 0 0;
+  border-style: solid;
+  border-color: white transparent transparent transparent;
+}

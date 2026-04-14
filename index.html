@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#00306b" />
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/2830/2830284.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <title>Shinhan AI Advisor</title>
+    <link rel="preload" href="/Test.vrm" as="fetch" crossorigin="anonymous" />
+    <!-- MỚI: Cấu hình Tailwind và Font từ thiết kế Stitch -->
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+      rel="stylesheet"
+    />
+    <script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "on-surface-variant": "#424751",
+              "surface-container": "#ebeef1",
+              tertiary: "#29333e",
+              "on-tertiary-fixed-variant": "#3e4853",
+              "surface-container-highest": "#e0e3e6",
+              "surface-variant": "#e0e3e6",
+              "on-secondary-fixed-variant": "#004883",
+              outline: "#737783",
+              "primary-container": "#004695",
+              "surface-container-high": "#e5e8eb",
+              "on-primary-container": "#94b8ff",
+              surface: "#f7fafd",
+              "primary-fixed-dim": "#acc7ff",
+              "inverse-primary": "#acc7ff",
+              error: "#ba1a1a",
+              "inverse-on-surface": "#eef1f4",
+              "surface-dim": "#d7dadd",
+              "on-secondary": "#ffffff",
+              "on-error": "#ffffff",
+              "on-tertiary-container": "#aeb8c6",
+              "on-background": "#181c1e",
+              "tertiary-fixed-dim": "#bdc7d6",
+              "outline-variant": "#c3c6d3",
+              "on-tertiary": "#ffffff",
+              "inverse-surface": "#2d3133",
+              "secondary-fixed": "#d4e3ff",
+              background: "#f7fafd",
+              "on-surface": "#181c1e",
+              primary: "#00306b",
+              "secondary-fixed-dim": "#a4c9ff",
+              "tertiary-container": "#3f4955",
+              "on-secondary-container": "#00447d",
+              "on-primary-fixed": "#001a40",
+              "surface-container-low": "#f1f4f7",
+              "on-primary": "#ffffff",
+              "secondary-container": "#7bb3fe",
+              "surface-container-lowest": "#ffffff",
+              "primary-fixed": "#d7e2ff",
+              secondary: "#1a60a5",
+              "error-container": "#ffdad6",
+              "on-tertiary-fixed": "#131c27",
+              "surface-bright": "#f7fafd",
+              "tertiary-fixed": "#d9e3f2",
+              "surface-tint": "#295dac",
+              "on-error-container": "#93000a",
+              "on-secondary-fixed": "#001c39",
+              "on-primary-fixed-variant": "#004492",
+            },
+            borderRadius: {
+              DEFAULT: "0.25rem",
+              lg: "0.5rem",
+              xl: "0.75rem",
+              full: "9999px",
+            },
+            fontFamily: {
+              headline: ["Manrope"],
+              body: ["Inter"],
+              label: ["Inter"],
+            },
+          },
+        },
+      };
+    </script>
+    <style>
+      .font-headline {
+        font-family: "Manrope", sans-serif;
+      }
+      .material-symbols-outlined {
+        font-variation-settings:
+          "FILL" 0,
+          "wght" 400,
+          "GRAD" 0,
+          "opsz" 24;
+      }
+      .no-scrollbar::-webkit-scrollbar {
+        display: none;
+      }
+    </style>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --shinhan-blue: #0046ff;
+        --shinhan-deep: #002266;
+        --shinhan-mint: #00e5d1;
+        --glass: rgba(255, 255, 255, 0.1);
+        --glass-border: rgba(255, 255, 255, 0.2);
+      }
+
+      body,
+      html {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background-color: #000;
+        font-family: "Outfit", sans-serif;
+        color: white;
+      }
+
+      #canvas-container {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 1;
+      }
+
+      #ui-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 2;
+        pointer-events: none;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+        padding: 40px;
+        box-sizing: border-box;
+      }
+
+      .advisor-card {
+        background: rgba(0, 34, 102, 0.7);
+        backdrop-filter: blur(20px);
+        border: 1px solid var(--glass-border);
+        border-radius: 24px;
+        padding: 24px;
+        max-width: 450px;
+        pointer-events: auto;
+        transform: translateY(100px);
+        opacity: 0;
+        transition: all 0.6s cubic-bezier(0.23, 1, 0.32, 1);
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+      }
+
+      .advisor-card.visible {
+        transform: translateY(0);
+        opacity: 1;
+      }
+
+      .advisor-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 12px;
+      }
+
+      .avatar-indicator {
+        width: 12px;
+        height: 12px;
+        background: var(--shinhan-mint);
+        border-radius: 50%;
+        box-shadow: 0 0 10px var(--shinhan-mint);
+        animation: pulse 2s infinite;
+      }
+
+      @keyframes pulse {
+        0% {
+          transform: scale(1);
+          opacity: 1;
+        }
+        50% {
+          transform: scale(1.5);
+          opacity: 0.5;
+        }
+        100% {
+          transform: scale(1);
+          opacity: 1;
+        }
+      }
+
+      .advisor-name {
+        font-weight: 700;
+        font-size: 1.1rem;
+        letter-spacing: 0.5px;
+      }
+
+      .advisor-text {
+        font-size: 1rem;
+        line-height: 1.6;
+        color: rgba(255, 255, 255, 0.9);
+        margin-bottom: 20px;
+      }
+
+      .btn-group {
+        display: flex;
+        gap: 12px;
+      }
+
+      .btn {
+        background: var(--shinhan-blue);
+        border: none;
+        color: white;
+        padding: 12px 24px;
+        border-radius: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        font-family: "Outfit", sans-serif;
+      }
+
+      .btn:hover {
+        background: white;
+        color: var(--shinhan-blue);
+        transform: translateY(-2px);
+      }
+
+      .btn-outline {
+        background: transparent;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+      }
+
+      .trigger-button {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        pointer-events: auto;
+        background: rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        color: white;
+        padding: 10px 20px;
+        border-radius: 30px;
+        cursor: pointer;
+        z-index: 10;
+      }
+
+      .logo {
+        position: absolute;
+        top: 30px;
+        left: 40px;
+        z-index: 10;
+        font-weight: 800;
+        font-size: 1.5rem;
+        letter-spacing: -0.5px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .logo span {
+        color: var(--shinhan-mint);
+      }
+
+      .loading-screen {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: var(--shinhan-deep);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+        transition: opacity 1s ease;
+      }
+
+      .loader {
+        width: 48px;
+        height: 48px;
+        border: 5px solid #fff;
+        border-bottom-color: var(--shinhan-mint);
+        border-radius: 50%;
+        display: inline-block;
+        box-sizing: border-box;
+        animation: rotation 1s linear infinite;
+      }
+
+      @keyframes rotation {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+
+      .input-bar {
+        position: absolute;
+        bottom: 30px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 10;
+        display: flex;
+        gap: 8px;
+        width: 90%;
+        max-width: 550px;
+        pointer-events: auto;
+      }
+
+      .input-bar input {
+        flex: 1;
+        background: rgba(0, 34, 102, 0.6);
+        backdrop-filter: blur(16px);
+        border: 1px solid var(--glass-border);
+        border-radius: 16px;
+        padding: 14px 20px;
+        font-size: 1rem;
+        color: white;
+        font-family: "Outfit", sans-serif;
+        outline: none;
+        transition: border-color 0.3s;
+      }
+
+      .input-bar input::placeholder {
+        color: rgba(255, 255, 255, 0.4);
+      }
+
+      .input-bar input:focus {
+        border-color: var(--shinhan-mint);
+      }
+
+      .input-bar button {
+        background: var(--shinhan-mint);
+        color: var(--shinhan-deep);
+        border: none;
+        padding: 14px 24px;
+        border-radius: 16px;
+        font-weight: 700;
+        cursor: pointer;
+        font-family: "Outfit", sans-serif;
+        font-size: 1rem;
+        transition: all 0.3s ease;
+        white-space: nowrap;
+      }
+
+      .input-bar button:hover {
+        background: white;
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(0, 229, 209, 0.4);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
