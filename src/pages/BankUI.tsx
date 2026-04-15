@@ -8,6 +8,21 @@ export default function BankUI() {
   const [activeTab, setActiveTab] = useState("Home");
   const [showPaymentMenu, setShowPaymentMenu] = useState(false);
   const [balance, setBalance] = useState(15000000);
+  const [preloadedAudioUrl, setPreloadedAudioUrl] = useState<string | null>(null);
+
+  // ── Global persistent notifications ──
+  const [globalDeductToast, setGlobalDeductToast] = useState<{ show: boolean; amount: string; remaining: number } | null>(null);
+  const [globalAdvisorToast, setGlobalAdvisorToast] = useState<{ show: boolean; audioUrl: string | null; script: string } | null>(null);
+
+  const handleTransactionComplete = (amount: string) => {
+    setGlobalDeductToast({ show: true, amount, remaining: balance });
+    const timer = setTimeout(() => setGlobalDeductToast(null), 6000);
+    return () => clearTimeout(timer);
+  };
+
+  const handleAdvisorReady = (audioUrl: string | null, script: string) => {
+    setGlobalAdvisorToast({ show: true, audioUrl, script });
+  };
 
   const handleServiceClick = (serviceName: string) => {
     if (serviceName === "Transfer") {
@@ -75,9 +90,25 @@ export default function BankUI() {
             onBack={() => setActiveTab("Home")} 
             onSuccessReturnHome={() => setActiveTab("Home")} 
             onOpenAdvisor={(msg) => {
-              setNotification(msg);
+              if (msg.startsWith('__AUDIO__')) {
+                const rest = msg.slice('__AUDIO__'.length);
+                const sepIdx = rest.indexOf('||');
+                if (sepIdx !== -1) {
+                  const audioUrl = rest.slice(0, sepIdx);
+                  const script = rest.slice(sepIdx + 2);
+                  setNotification(script);
+                  setPreloadedAudioUrl(audioUrl);
+                } else {
+                  setNotification(rest);
+                }
+              } else {
+                setNotification(msg);
+                setPreloadedAudioUrl(null);
+              }
               setActiveTab("AI Advisor");
             }}
+            onTransactionComplete={handleTransactionComplete}
+            onAdvisorReady={handleAdvisorReady}
             balance={balance}
             setBalance={setBalance}
           />
@@ -197,7 +228,8 @@ export default function BankUI() {
             {/* The 3D avatar handles its own transparent background via <AiAssistantWidget/> overlay */}
             <AiAssistantWidget
               textToSpeak={notification}
-              onAudioEnd={() => setNotification("")}
+              preloadedAudioUrl={preloadedAudioUrl ?? undefined}
+              onAudioEnd={() => { setNotification(""); setPreloadedAudioUrl(null); }}
               onTextInput={(val) => setNotification(val)}
             />
           </div>
@@ -450,6 +482,77 @@ export default function BankUI() {
               ))}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ════ GLOBAL PERSISTENT TOASTS (survive tab changes) ════ */}
+      <style>{`
+        @keyframes slideDownIn {
+          from { transform: translateX(-50%) translateY(-110%); opacity: 0; }
+          to   { transform: translateX(-50%) translateY(0);    opacity: 1; }
+        }
+        .g-toast { animation: slideDownIn 0.45s cubic-bezier(0.16,1,0.3,1) forwards; }
+      `}</style>
+
+      {/* Balance deduction toast */}
+      {globalDeductToast?.show && (
+        <div className="g-toast" style={{ position:'fixed', top:10, left:'50%', width:'calc(100% - 24px)', maxWidth:456, zIndex:9000 }}>
+          <div className="bg-white rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.14)] border border-gray-100 px-4 py-3 flex items-center gap-3">
+            <div className="w-9 h-9 bg-red-50 rounded-xl flex items-center justify-center shrink-0">
+              <span className="material-symbols-outlined text-red-500 text-[20px]">account_balance_wallet</span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-bold text-gray-800 text-[13px]">Balance Changed</p>
+              <p className="text-gray-500 text-[12px] truncate">
+                <span className="text-red-500 font-semibold">-{globalDeductToast.amount} VND</span>
+                {' '}· Còn lại: <span className="text-[#2f66ee] font-semibold">{balance.toLocaleString('vi-VN')} VND</span>
+              </p>
+            </div>
+            <button onClick={() => setGlobalDeductToast(null)} className="shrink-0 p-1 rounded-full hover:bg-gray-100">
+              <span className="material-symbols-outlined text-gray-400 text-[18px]">close</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* AI Advisor toast — stays until tapped or dismissed */}
+      {globalAdvisorToast?.show && (
+        <div className="g-toast" style={{
+          position:'fixed', top: globalDeductToast?.show ? 84 : 10,
+          left:'50%', width:'calc(100% - 24px)', maxWidth:456, zIndex:9001, transition:'top 0.3s ease'
+        }}>
+          <button
+            onClick={() => {
+              const { audioUrl, script } = globalAdvisorToast;
+              setGlobalAdvisorToast(null);
+              setNotification(script);
+              setPreloadedAudioUrl(audioUrl);
+              setActiveTab('AI Advisor');
+            }}
+            className="w-full bg-gradient-to-r from-[#2f66ee] to-[#1a8cff] rounded-2xl px-4 py-3 shadow-[0_8px_30px_rgba(47,102,238,0.35)] flex items-center gap-3 text-left active:scale-[0.98] transition-transform"
+          >
+            <div className="relative shrink-0">
+              <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+                <span className="material-symbols-outlined text-white text-[22px]">robot_2</span>
+              </div>
+              <div className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-green-400 rounded-full border-2 border-[#2f66ee] animate-pulse" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-bold text-white text-[13px] mb-0.5">🎯 AI Advisor has a tip for you!</p>
+              <p className="text-white/70 text-[11px] truncate">Tap to hear your personalized recommendation</p>
+            </div>
+            <div className="shrink-0 flex items-center gap-1.5">
+              <div className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center">
+                <span className="material-symbols-outlined text-white text-[15px]">arrow_forward</span>
+              </div>
+              <button
+                onClick={(e) => { e.stopPropagation(); setGlobalAdvisorToast(null); }}
+                className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center"
+              >
+                <span className="material-symbols-outlined text-white text-[15px]">close</span>
+              </button>
+            </div>
+          </button>
         </div>
       )}
     </div>

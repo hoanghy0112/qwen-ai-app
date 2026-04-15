@@ -5,8 +5,11 @@ import dashscope
 from dashscope.audio.tts_v2 import SpeechSynthesizer
 from dotenv import load_dotenv
 
-# Load API key from Vite's .env.local
-load_dotenv('.env.local')
+from pathlib import Path
+
+# Load API key - dùng đường dẫn tuyệt đối để tránh lỗi khi chạy từ thư mục khác
+_env_path = Path(__file__).parent / '.env.local'
+load_dotenv(_env_path)
 
 api_key = os.environ.get('VITE_DASHSCOPE_API_KEY')
 if not api_key:
