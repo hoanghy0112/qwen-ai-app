@@ -3,6 +3,37 @@ import { Canvas, useThree } from '@react-three/fiber';
 import { Html, useProgress } from '@react-three/drei';
 import DigitalAvatar from './DigitalAvatar';
 
+// Chuyển số sang chữ tiếng Anh để TTS đọc đúng
+function numberToWords(n: number): string {
+  if (n === 0) return 'zero';
+  const units = ['','one','two','three','four','five','six','seven','eight','nine',
+    'ten','eleven','twelve','thirteen','fourteen','fifteen','sixteen','seventeen','eighteen','nineteen'];
+  const tens = ['','','twenty','thirty','forty','fifty','sixty','seventy','eighty','ninety'];
+  function chunk(x: number): string {
+    if (x === 0) return '';
+    if (x < 20) return units[x];
+    if (x < 100) return tens[Math.floor(x/10)] + (x%10 ? ' '+units[x%10] : '');
+    return units[Math.floor(x/100)] + ' hundred' + (x%100 ? ' '+chunk(x%100) : '');
+  }
+  const scales: [number,string][] = [[1e9,'billion'],[1e6,'million'],[1e3,'thousand']];
+  let result = '';
+  let rem = n;
+  for (const [val,label] of scales) {
+    if (rem >= val) { result += (result?' ':'') + chunk(Math.floor(rem/val)) + ' ' + label; rem %= val; }
+  }
+  if (rem > 0) result += (result?' ':'') + chunk(rem);
+  return result.trim();
+}
+
+// Chuyển text có số VND (vd: "500.000 VND") thành dạng đọc được ("five hundred thousand dong")
+function convertForTTS(text: string): string {
+  return text.replace(/([\d.]+)\s*VND/gi, (_, numStr) => {
+    const num = parseInt(numStr.replace(/\./g, ''), 10);
+    if (isNaN(num)) return numStr + ' VND';
+    return numberToWords(num) + ' dong';
+  });
+}
+
 function Loader() {
   const { progress } = useProgress();
   return (
@@ -73,16 +104,41 @@ export default function AiAssistantWidget({ textToSpeak, onAudioEnd, onTextInput
         
         const dashscopeKey = import.meta.env.VITE_DASHSCOPE_API_KEY;
         if (dashscopeKey) {
-            // Use the Python Proxy Server running locally on port 5000
-            audioRef.current.src = `/api/cosyvoice?q=${encodeURIComponent(textToSpeak)}`;
+            // Dùng CosyVoice qua Python proxy (port 5000)
+            audioRef.current.src = `/api/cosyvoice?q=${encodeURIComponent(convertForTTS(textToSpeak))}`;
             audioRef.current.play().catch(e => console.error("Audio playback failed:", e));
         } else {
-            // Fallback to Google Translate TTS
-            audioRef.current.src = `/tts?client=gtx&ie=UTF-8&tl=en&q=${encodeURIComponent(textToSpeak)}`;
-            audioRef.current.play().catch(e => console.error("Audio playback failed:", e));
+            // Fallback: Web Speech API (không cần key, chạy thẳng trên browser)
+            const utterance = new SpeechSynthesisUtterance(convertForTTS(textToSpeak));
+            utterance.lang = 'en-US';
+            utterance.rate = 0.95;
+            utterance.pitch = 1.1;
+
+            // Tìm giọng nữ nếu có
+            const voices = window.speechSynthesis.getVoices();
+            const femaleVoice = voices.find(v =>
+                v.lang.startsWith('en') && (v.name.toLowerCase().includes('female') || v.name.toLowerCase().includes('zira') || v.name.toLowerCase().includes('aria') || v.name.toLowerCase().includes('susan'))
+            ) || voices.find(v => v.lang.startsWith('en'));
+            if (femaleVoice) utterance.voice = femaleVoice;
+
+            utterance.onstart = () => setIsActuallyTalking(true);
+            utterance.onend = () => {
+                setIsActuallyTalking(false);
+                if (onAudioEnd) onAudioEnd();
+            };
+            utterance.onerror = (e) => {
+                setIsActuallyTalking(false);
+                console.error('Web Speech error:', e);
+            };
+
+            window.speechSynthesis.cancel(); // Dừng nếu đang nói câu khác
+            window.speechSynthesis.speak(utterance);
         }
-    } else if (!textToSpeak && audioRef.current) {
-        audioRef.current.pause();
+    } else if (!textToSpeak) {
+        // Dừng cả 2 loại TTS
+        if (audioRef.current) audioRef.current.pause();
+        window.speechSynthesis.cancel();
+        setIsActuallyTalking(false);
     }
   }, [textToSpeak]);
 

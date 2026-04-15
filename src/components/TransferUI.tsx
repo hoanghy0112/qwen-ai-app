@@ -1,5 +1,43 @@
 import React, { useState, useEffect } from 'react';
 
+// Chuyển số VND sang dạng tiếng Anh đọc được cho TTS
+function amountToSpeakable(formattedAmount: string): string {
+  const num = parseFloat(formattedAmount.replace(/[^\d]/g, '')) || 0;
+  if (num === 0) return 'zero dong';
+
+  const units = ['', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine',
+    'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen'];
+  const tens = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
+
+  function convertChunk(n: number): string {
+    if (n === 0) return '';
+    if (n < 20) return units[n];
+    if (n < 100) return tens[Math.floor(n / 10)] + (n % 10 ? ' ' + units[n % 10] : '');
+    return units[Math.floor(n / 100)] + ' hundred' + (n % 100 ? ' ' + convertChunk(n % 100) : '');
+  }
+
+  const scales = [
+    { value: 1_000_000_000, label: 'billion' },
+    { value: 1_000_000, label: 'million' },
+    { value: 1_000, label: 'thousand' },
+  ];
+
+  let result = '';
+  let remaining = num;
+  for (const scale of scales) {
+    if (remaining >= scale.value) {
+      const count = Math.floor(remaining / scale.value);
+      result += (result ? ' ' : '') + convertChunk(count) + ' ' + scale.label;
+      remaining %= scale.value;
+    }
+  }
+  if (remaining > 0) {
+    result += (result ? ' ' : '') + convertChunk(remaining);
+  }
+
+  return result.trim() + ' dong';
+}
+
 interface TransferUIProps {
   onBack: () => void;
   onSuccessReturnHome: () => void;
@@ -24,6 +62,8 @@ export default function TransferUI({ onBack, onSuccessReturnHome, onOpenAdvisor,
   const [showDeductedNotif, setShowDeductedNotif] = useState(false);
   const [showAvatarNotif, setShowAvatarNotif] = useState(false);
   const [allowTransition, setAllowTransition] = useState(false);
+  // Script từ API recommend - lưu lại để dùng ở step 4
+  const [recommendScript, setRecommendScript] = useState('');
 
   // Countdown Timer
   useEffect(() => {
@@ -103,7 +143,19 @@ export default function TransferUI({ onBack, onSuccessReturnHome, onOpenAdvisor,
     setAmount(num.toLocaleString('vi-VN'));
   };
 
-  const handleContinue = () => {
+  // ========== MOCK FLAG ==========
+  // Đổi thành false khi backend đã sẵn sàng để gọi API thật
+  const USE_MOCK = false;
+
+  const mockRecommendResponse = {
+    session_id: 'session_mock_001',
+    product_id: 'travel_insurance_premium',
+    script: 'We noticed you frequently make transfers. Our Smart Savings account offers 6.5% annual interest with flexible withdrawal. Would you like to learn more?',
+    cta: 'Learn More',
+    latency_ms: 1200
+  };
+
+  const handleContinue = async () => {
     const amountVal = parseFloat(amount.replace(/[^\d]/g, '')) || 0;
     if (amountVal <= 0) {
       setErrorMsg('Please enter a valid amount');
@@ -113,6 +165,44 @@ export default function TransferUI({ onBack, onSuccessReturnHome, onOpenAdvisor,
       setErrorMsg('Insufficient balance');
       return;
     }
+
+    try {
+      let data;
+
+      if (USE_MOCK) {
+        // Giả lập độ trễ của API (1-2 giây)
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        data = mockRecommendResponse;
+        console.log('[MOCK] Recommend Response:', data);
+      } else {
+        // Gọi API thật - theo đúng schema của backend
+        const response = await fetch('/api/flows/recommend', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            session_id: `session_${Date.now()}`,
+            user_token: 'user_12345',
+            transaction: {
+              amount: amountVal,
+              merchant: 'Transfer',
+              category: 'transfer'
+            }
+          })
+        });
+        data = await response.json();
+        console.log('[API] Recommend Response:', data);
+      }
+
+      // ✅ Chỉ lưu script vào state, KHÔNG switch tab ngay
+      // Avatar toast ở step 4 sẽ dùng script này khi user tap
+      if (data?.script) {
+        setRecommendScript(data.script);
+      }
+
+    } catch (error) {
+      console.error('Lỗi khi gọi API recommend:', error);
+    }
+
     setErrorMsg('');
     setAllowTransition(false);
     setStep(2);
@@ -477,7 +567,10 @@ export default function TransferUI({ onBack, onSuccessReturnHome, onOpenAdvisor,
         <div className="absolute inset-0 bg-surface text-on-surface z-[100] flex flex-col font-body bg-gray-50 pb-6 max-h-[100dvh] overflow-hidden">
           {/* Avatar Notification Toast */}
           <div 
-            onClick={() => onOpenAdvisor(`I noticed you just successfully transferred ${amount} VND. Do you need any assistance regarding this transaction?`)}
+            onClick={() => onOpenAdvisor(
+              recommendScript ||
+              `I noticed you just successfully transferred ${amount} VND. Do you need any assistance regarding this transaction?`
+            )}
             className={`absolute top-[104px] left-4 right-4 bg-white/95 backdrop-blur-xl rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-blue-50 p-4 transform ${allowTransition ? 'transition-all duration-500' : ''} z-[190] cursor-pointer hover:bg-gray-50 active:scale-[0.98] ${showAvatarNotif ? 'translate-y-0 opacity-100' : '-translate-y-[200%] opacity-0 pointer-events-none'}`}
           >
              <div className="flex items-start gap-3">

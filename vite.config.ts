@@ -22,6 +22,14 @@ export default defineConfig({
           });
         }
       },
+      '/api/flows': {
+        target: 'http://localhost:7999',
+        changeOrigin: true
+      },
+      '/api/chat': {
+        target: 'http://localhost:7999',
+        changeOrigin: true
+      },
       '/api/cosyvoice': {
         target: 'http://localhost:5000',
         changeOrigin: true,
