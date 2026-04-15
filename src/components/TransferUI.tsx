@@ -42,11 +42,25 @@ interface TransferUIProps {
   onBack: () => void;
   onSuccessReturnHome: () => void;
   onOpenAdvisor: (message: string) => void;
+  onTransactionComplete: (amount: string) => void;
+  onAdvisorReady: (audioUrl: string | null, script: string) => void;
   balance: number;
   setBalance: React.Dispatch<React.SetStateAction<number>>;
 }
 
-export default function TransferUI({ onBack, onSuccessReturnHome, onOpenAdvisor, balance, setBalance }: TransferUIProps) {
+// Fix 2: Danh sách ngân hàng có thể chọn
+const BANKS = [
+  { code: 'SHBVN', name: 'Shinhan Bank Vietnam', abbr: 'S', color: '#2f66ee' },
+  { code: 'VCB',   name: 'Vietcombank',           abbr: 'V', color: '#00703c' },
+  { code: 'TCB',   name: 'Techcombank',            abbr: 'T', color: '#e2001a' },
+  { code: 'MB',    name: 'MB Bank',                abbr: 'M', color: '#6b21a8' },
+  { code: 'ACB',   name: 'ACB Bank',               abbr: 'A', color: '#0d7dff' },
+  { code: 'VPB',   name: 'VPBank',                 abbr: 'VP', color: '#ff6b00' },
+  { code: 'BIDV',  name: 'BIDV',                   abbr: 'B', color: '#005aab' },
+  { code: 'VTB',   name: 'Vietinbank',             abbr: 'Vi', color: '#e30613' },
+];
+
+export default function TransferUI({ onBack, onSuccessReturnHome, onOpenAdvisor, onTransactionComplete, onAdvisorReady, balance, setBalance }: TransferUIProps) {
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [amount, setAmount] = useState<string>('');
   const [content, setContent] = useState<string>('NGUYEN XUAN TRUNG TRANSFER');
@@ -59,11 +73,28 @@ export default function TransferUI({ onBack, onSuccessReturnHome, onOpenAdvisor,
   const [countdown, setCountdown] = useState(59);
   const [otpTrigger, setOtpTrigger] = useState(0);
   const [errorMsg, setErrorMsg] = useState('');
+  const [accountNoError, setAccountNoError] = useState('');
   const [showDeductedNotif, setShowDeductedNotif] = useState(false);
   const [showAvatarNotif, setShowAvatarNotif] = useState(false);
+  const [showAdvisorToast, setShowAdvisorToast] = useState(false);
   const [allowTransition, setAllowTransition] = useState(false);
-  // Script từ API recommend - lưu lại để dùng ở step 4
   const [recommendScript, setRecommendScript] = useState('');
+  // Fix 1: trạng thái ẩn/hiện số dư
+  const [balanceVisible, setBalanceVisible] = useState(true);
+  // Fix 2: ngân hàng đang chọn
+  const [selectedBankCode, setSelectedBankCode] = useState('SHBVN');
+  const [showBankDropdown, setShowBankDropdown] = useState(false);
+  // Fix 4: timestamp tĩnh — chụp lại 1 lần khi bước vào step 4
+  const [successTimestamp, setSuccessTimestamp] = useState('');
+  // Loading state khi đang chờ tín hiệu mạng ở bước Confirm
+  const [isConfirmLoading, setIsConfirmLoading] = useState(false);
+  // Advisor background pipeline state
+  type AdvisorStatus = 'idle' | 'fetching' | 'ready' | 'failed';
+  const [advisorStatus, setAdvisorStatus] = useState<AdvisorStatus>('idle');
+  const prefetchedAudioUrl = React.useRef<string | null>(null);
+  const advisorShownRef = React.useRef(false);
+
+  const selectedBank = BANKS.find(b => b.code === selectedBankCode) ?? BANKS[0];
 
   // Countdown Timer
   useEffect(() => {
@@ -102,24 +133,12 @@ export default function TransferUI({ onBack, onSuccessReturnHome, onOpenAdvisor,
 
   useEffect(() => {
     if (step === 4) {
+      advisorShownRef.current = false;
       const initTimer = setTimeout(() => setAllowTransition(true), 50);
-      const showTimer = setTimeout(() => {
-        setShowDeductedNotif(true);
-        setTimeout(() => {
-          setShowDeductedNotif(false);
-        }, 5000);
-      }, 2500);
-      const avatarTimer = setTimeout(() => {
-        setShowAvatarNotif(true);
-      }, 3500);
-      return () => {
-        clearTimeout(initTimer);
-        clearTimeout(showTimer);
-        clearTimeout(avatarTimer);
-      };
+      return () => clearTimeout(initTimer);
     } else {
-      setShowDeductedNotif(false);
       setShowAvatarNotif(false);
+      setShowAdvisorToast(false);
       return undefined;
     }
   }, [step]);
@@ -155,7 +174,20 @@ export default function TransferUI({ onBack, onSuccessReturnHome, onOpenAdvisor,
     latency_ms: 1200
   };
 
-  const handleContinue = async () => {
+  const handleContinue = () => {
+    // Validate account number
+    const trimmedAccount = accountNo.trim();
+    if (!trimmedAccount) {
+      setAccountNoError('Please enter account number');
+      return;
+    }
+    if (!/^\d+$/.test(trimmedAccount)) {
+      setAccountNoError('Account number must contain digits only');
+      return;
+    }
+    setAccountNoError('');
+
+    // Validate amount
     const amountVal = parseFloat(amount.replace(/[^\d]/g, '')) || 0;
     if (amountVal <= 0) {
       setErrorMsg('Please enter a valid amount');
@@ -166,49 +198,65 @@ export default function TransferUI({ onBack, onSuccessReturnHome, onOpenAdvisor,
       return;
     }
 
-    try {
-      let data;
+    setErrorMsg('');
+    setAllowTransition(false);
+    setStep(2);
 
+    // 🔥 Fire-and-forget: chạy pipeline ngầm ngay khi bấm Continue
+    prefetchAdvisor(amountVal);
+  };
+
+  // ─── Background pipeline: API → script → TTS → blob URL ───────────────────
+  const prefetchAdvisor = async (amountVal: number) => {
+    setAdvisorStatus('fetching');
+    try {
+      // Step 1: Get recommend script
+      let script = '';
       if (USE_MOCK) {
-        // Giả lập độ trễ của API (1-2 giây)
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        data = mockRecommendResponse;
-        console.log('[MOCK] Recommend Response:', data);
+        await new Promise(r => setTimeout(r, 800));
+        script = mockRecommendResponse.script;
       } else {
-        // Gọi API thật - theo đúng schema của backend
-        const response = await fetch('/api/flows/recommend', {
+        const res = await fetch('/api/flows/recommend', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             session_id: `session_${Date.now()}`,
             user_token: 'user_12345',
-            transaction: {
-              amount: amountVal,
-              merchant: 'Transfer',
-              category: 'transfer'
-            }
+            transaction: { amount: amountVal, merchant: 'Transfer', category: 'transfer' }
           })
         });
-        data = await response.json();
-        console.log('[API] Recommend Response:', data);
+        const data = await res.json();
+        script = data?.script || '';
       }
+      if (script) setRecommendScript(script);
+      else throw new Error('No script');
 
-      // ✅ Chỉ lưu script vào state, KHÔNG switch tab ngay
-      // Avatar toast ở step 4 sẽ dùng script này khi user tap
-      if (data?.script) {
-        setRecommendScript(data.script);
-      }
+      // Step 2: Pre-generate TTS audio
+      const ttsRes = await fetch('http://localhost:5000/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: script })
+      });
+      if (!ttsRes.ok) throw new Error('TTS failed');
+      const blob = await ttsRes.blob();
+      prefetchedAudioUrl.current = URL.createObjectURL(blob);
 
-    } catch (error) {
-      console.error('Lỗi khi gọi API recommend:', error);
+      setAdvisorStatus('ready');
+      // Thông báo lên BankUI — sẽ hiện toast dù user đang ở tab nào
+      onAdvisorReady(prefetchedAudioUrl.current, script);
+    } catch (err) {
+      console.error('[Advisor prefetch] Error:', err);
+      setAdvisorStatus('failed');
+      // Vẫn notify với script (không có audio)
+      if (recommendScript) onAdvisorReady(null, recommendScript);
     }
-
-    setErrorMsg('');
-    setAllowTransition(false);
-    setStep(2);
   };
 
-  const handleConfirmReview = () => {
+  const handleConfirmReview = async () => {
+    // Hiện loading 3s (chờ tín hiệu mạng lấy OTP)
+    setIsConfirmLoading(true);
+    await new Promise(resolve => setTimeout(resolve, 3000));
+    setIsConfirmLoading(false);
     setAllowTransition(false);
     setCountdown(59);
     setOtpTrigger(prev => prev + 1);
@@ -223,10 +271,16 @@ export default function TransferUI({ onBack, onSuccessReturnHome, onOpenAdvisor,
 
   const handleConfirmOtp = () => {
     const amountVal = parseFloat(amount.replace(/[^\d]/g, '')) || 0;
+    setSuccessTimestamp(new Date().toLocaleString('en-US'));
     setAllowTransition(false);
     setBalance(prev => prev - amountVal);
+    // Thông báo lên BankUI để show global balance toast
+    onTransactionComplete(amount);
     setStep(4);
   };
+
+  // Fix 3: chỉ cho confirm khi đã nhập đủ 6 số OTP
+  const isOtpComplete = otp.every(d => d !== '');
 
   const handleOtpChange = (index: number, value: string) => {
     if (!/^\d*$/.test(value)) return;
@@ -262,8 +316,21 @@ export default function TransferUI({ onBack, onSuccessReturnHome, onOpenAdvisor,
             </div>
             <div className="flex items-center gap-2 mt-4">
               <span className="text-[10px] font-bold bg-blue-50 text-[#2f66ee] px-2 py-0.5 rounded-md uppercase">VND</span>
-              <span className="font-bold text-gray-800 text-lg">{balance.toLocaleString('vi-VN')}</span>
-              <span className="material-symbols-outlined text-gray-600 text-lg ml-1">visibility_off</span>
+              {/* Fix 1: hiện số hoặc dấu * tuỳ trạng thái balanceVisible */}
+              <span className="font-bold text-gray-800 text-lg">
+                {balanceVisible
+                  ? balance.toLocaleString('vi-VN')
+                  : '•'.repeat(balance.toLocaleString('vi-VN').length)}
+              </span>
+              <button
+                onClick={() => setBalanceVisible(v => !v)}
+                className="ml-1 p-0.5 rounded-full hover:bg-gray-100 transition-colors"
+                aria-label={balanceVisible ? 'Hide balance' : 'Show balance'}
+              >
+                <span className="material-symbols-outlined text-gray-600 text-lg">
+                  {balanceVisible ? 'visibility' : 'visibility_off'}
+                </span>
+              </button>
             </div>
           </div>
 
@@ -285,33 +352,78 @@ export default function TransferUI({ onBack, onSuccessReturnHome, onOpenAdvisor,
               <p className="text-[13px] leading-tight">Turn off Fast Transfer to make a regular transfer</p>
             </div>
 
-            {/* Destination Bank Dropdown */}
-            <div className="bg-white rounded-xl p-3 border border-gray-200 shadow-sm mb-3 flex items-center justify-between cursor-pointer active:scale-[0.98] transition-transform">
-              <div className="flex items-center gap-4 border border-gray-100 p-2 rounded-lg bg-gray-50/50 w-full">
-                <div className="bg-[#2f66ee] w-10 h-10 rounded-full flex items-center justify-center shrink-0">
-                  <span className="text-white font-extrabold italic text-lg leading-none tracking-tighter shrink-0" style={{fontFamily: 'serif'}}>S</span>
-                </div>
-                <div className="flex flex-col">
-                  <span className="font-bold text-[15px] text-gray-800">SHBVN</span>
-                  <span className="text-[13px] text-gray-500">Shinhan Bank Vietnam</span>
-                </div>
-                <div className="ml-auto">
-                    <span className="material-symbols-outlined text-gray-400">keyboard_arrow_down</span>
+            {/* Fix 2: Destination Bank Dropdown — có thể chọn ngân hàng */}
+            <div className="relative mb-3">
+              <div
+                onClick={() => setShowBankDropdown(v => !v)}
+                className="bg-white rounded-xl p-3 border border-gray-200 shadow-sm flex items-center justify-between cursor-pointer active:scale-[0.98] transition-transform"
+              >
+                <div className="flex items-center gap-4 border border-gray-100 p-2 rounded-lg bg-gray-50/50 w-full">
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{background: selectedBank.color}}>
+                    <span className="text-white font-extrabold italic text-lg leading-none tracking-tighter" style={{fontFamily: 'serif'}}>{selectedBank.abbr}</span>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="font-bold text-[15px] text-gray-800">{selectedBank.code}</span>
+                    <span className="text-[13px] text-gray-500">{selectedBank.name}</span>
+                  </div>
+                  <div className="ml-auto">
+                    <span className="material-symbols-outlined text-gray-400 transition-transform" style={{transform: showBankDropdown ? 'rotate(180deg)' : 'rotate(0deg)'}}>
+                      keyboard_arrow_down
+                    </span>
+                  </div>
                 </div>
               </div>
+
+              {/* Dropdown list */}
+              {showBankDropdown && (
+                <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl border border-gray-200 shadow-lg z-30 overflow-hidden">
+                  {BANKS.map(bank => (
+                    <div
+                      key={bank.code}
+                      onClick={() => { setSelectedBankCode(bank.code); setShowBankDropdown(false); }}
+                      className={`flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-gray-50 transition-colors ${
+                        bank.code === selectedBankCode ? 'bg-blue-50' : ''
+                      }`}
+                    >
+                      <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{background: bank.color}}>
+                        <span className="text-white font-bold text-xs" style={{fontFamily: 'serif'}}>{bank.abbr}</span>
+                      </div>
+                      <div>
+                        <p className="font-bold text-[13px] text-gray-800">{bank.code}</p>
+                        <p className="text-[11px] text-gray-500">{bank.name}</p>
+                      </div>
+                      {bank.code === selectedBankCode && (
+                        <span className="ml-auto material-symbols-outlined text-[#2f66ee] text-[18px]" style={{fontVariationSettings: "'FILL' 1"}}>check_circle</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Account Number Input */}
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm mb-3 overflow-hidden flex items-center">
-              <input 
-                type="text" 
-                placeholder="Account Number" 
+            <div className={`bg-white rounded-xl border ${accountNoError ? 'border-red-400' : 'border-gray-200'} shadow-sm ${accountNoError ? 'mb-1' : 'mb-3'} overflow-hidden flex items-center transition-colors`}>
+              <input
+                type="text"
+                inputMode="numeric"
+                placeholder="Account Number"
                 value={accountNo}
-                onChange={e => setAccountNo(e.target.value)}
-                className="w-full py-4 px-4 outline-none text-[15px] text-gray-800 placeholder-gray-500 font-medium" 
+                onChange={e => {
+                  // chỉ nhận ký tự số
+                  const val = e.target.value.replace(/[^\d]/g, '');
+                  setAccountNo(val);
+                  if (val) setAccountNoError('');
+                }}
+                className="w-full py-4 px-4 outline-none text-[15px] text-gray-800 placeholder-gray-500 font-medium"
               />
               <span className="material-symbols-outlined text-gray-400 pr-4 text-2xl shrink-0">receipt_long</span>
             </div>
+            {accountNoError && (
+              <div className="flex items-center gap-1 px-1 mb-3 text-red-500">
+                <span className="material-symbols-outlined text-[14px]">error</span>
+                <span className="text-[12px] font-bold">{accountNoError}</span>
+              </div>
+            )}
 
             {/* Transfer to Card Toggle */}
             <div className="flex justify-end items-center gap-3 mb-3 pr-1">
@@ -475,13 +587,41 @@ export default function TransferUI({ onBack, onSuccessReturnHome, onOpenAdvisor,
            </div>
         </div>
 
+        {/* Loading Overlay khi đang gọi API sau Confirm */}
+        {isConfirmLoading && (
+          <div className="absolute inset-0 z-[300] bg-black/40 backdrop-blur-[2px] flex flex-col items-center justify-center gap-5">
+            <div className="bg-white rounded-2xl px-8 py-8 flex flex-col items-center gap-4 shadow-2xl mx-6">
+              {/* Spinner */}
+              <div className="relative w-14 h-14">
+                <div className="absolute inset-0 rounded-full border-4 border-gray-100"></div>
+                <div className="absolute inset-0 rounded-full border-4 border-t-[#2f66ee] animate-spin"></div>
+              </div>
+              <div className="text-center">
+                <p className="font-bold text-gray-800 text-[16px] mb-1">Waiting for network signal</p>
+                <p className="text-gray-500 text-[13px]">Đang chờ tín hiệu mạng để{"\n"}gửi mã OTP xác thực...</p>
+              </div>
+              {/* Progress dots */}
+              <div className="flex gap-1.5">
+                {[0, 1, 2].map(i => (
+                  <div key={i} className="w-1.5 h-1.5 bg-[#2f66ee] rounded-full animate-bounce" style={{animationDelay: `${i * 0.15}s`}}></div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Fixed Continue Button */}
         <div className="fixed bottom-0 left-0 w-full p-4 bg-white pb-6 shrink-0 z-20 shadow-[0_-10px_20px_-5px_rgba(0,0,0,0.05)] border-t border-gray-100" style={{ maxWidth: '480px', transform: 'translateX(-50%)', left: '50%' }}>
-          <button 
+          <button
             onClick={handleConfirmReview}
-            className="w-full bg-[#2f66ee] text-white font-bold py-3.5 rounded-xl shadow-md hover:opacity-95 active:scale-[0.98] transition-all text-[15px]"
+            disabled={isConfirmLoading}
+            className={`w-full font-bold py-3.5 rounded-xl shadow-md transition-all text-[15px] ${
+              isConfirmLoading
+                ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                : 'bg-[#2f66ee] text-white hover:opacity-95 active:scale-[0.98]'
+            }`}
           >
-            Confirm
+            {isConfirmLoading ? 'Processing...' : 'Confirm'}
           </button>
         </div>
       </div>
@@ -551,9 +691,15 @@ export default function TransferUI({ onBack, onSuccessReturnHome, onOpenAdvisor,
           </div>
 
           <div className="px-4 mt-auto mb-4 w-full" style={{ maxWidth: '480px', margin: '0 auto' }}>
-            <button 
+            {/* Fix 3: disabled khi chưa đủ 6 số OTP */}
+            <button
                 onClick={handleConfirmOtp}
-                className="w-full bg-[#2f66ee] text-white font-bold py-4 rounded-xl shadow-lg hover:opacity-95 active:scale-[0.98] transition-all uppercase tracking-wide text-sm"
+                disabled={!isOtpComplete}
+                className={`w-full font-bold py-4 rounded-xl shadow-lg transition-all uppercase tracking-wide text-sm ${
+                  isOtpComplete
+                    ? 'bg-[#2f66ee] text-white hover:opacity-95 active:scale-[0.98]'
+                    : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                }`}
             >
               Confirm
             </button>
@@ -564,107 +710,90 @@ export default function TransferUI({ onBack, onSuccessReturnHome, onOpenAdvisor,
 
   if (step === 4) {
     return (
-        <div className="absolute inset-0 bg-surface text-on-surface z-[100] flex flex-col font-body bg-gray-50 pb-6 max-h-[100dvh] overflow-hidden">
-          {/* Avatar Notification Toast */}
-          <div 
-            onClick={() => onOpenAdvisor(
-              recommendScript ||
-              `I noticed you just successfully transferred ${amount} VND. Do you need any assistance regarding this transaction?`
-            )}
-            className={`absolute top-[104px] left-4 right-4 bg-white/95 backdrop-blur-xl rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-blue-50 p-4 transform ${allowTransition ? 'transition-all duration-500' : ''} z-[190] cursor-pointer hover:bg-gray-50 active:scale-[0.98] ${showAvatarNotif ? 'translate-y-0 opacity-100' : '-translate-y-[200%] opacity-0 pointer-events-none'}`}
-          >
-             <div className="flex items-start gap-3">
-                <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center shrink-0 shadow-md mt-0.5 border border-indigo-400">
-                   <span className="text-white text-[22px] material-symbols-outlined shrink-0">robot_2</span>
-                </div>
-                <div className="flex-1">
-                   <div className="flex items-center justify-between mb-0.5">
-                      <h3 className="font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600 text-[14px]">AI Advisor</h3>
-                      <span className="text-[11px] text-gray-400 font-medium">Just now</span>
-                   </div>
-                   <p className="text-gray-600 text-[13px] leading-tight pr-2">
-                     Transfer Successful! Tap here if you need any assistance regarding this transaction.
-                   </p>
-                </div>
-             </div>
-          </div>
-          {/* Balance Deduction Toast */}
-          <div className={`absolute top-4 left-4 right-4 bg-white/95 backdrop-blur-xl rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-red-50 p-4 transform ${allowTransition ? 'transition-all duration-500' : ''} z-[200] ${showDeductedNotif ? 'translate-y-0 opacity-100' : '-translate-y-[150%] opacity-0 pointer-events-none'}`}>
-             <div className="flex items-start gap-3">
-                <div className="w-10 h-10 bg-red-100/50 rounded-xl flex items-center justify-center shrink-0 shadow-sm mt-0.5 border border-red-50">
-                   <span className="text-red-500 text-[22px] material-symbols-outlined shrink-0">account_balance_wallet</span>
-                </div>
-                <div className="flex-1">
-                   <div className="flex items-center justify-between mb-0.5">
-                      <h3 className="font-bold text-gray-800 text-[14px]">Balance Changes</h3>
-                      <span className="text-[11px] text-gray-400 font-medium">Just now</span>
-                   </div>
-                   <p className="text-gray-600 text-[13px] leading-tight pr-2">
-                     Account <strong className="text-gray-800">700-031-586225</strong>: <span className="text-red-600 font-bold">-{amount} VND</span>. Current Balance: <strong className="text-[#2f66ee] text-[14px]">{balance.toLocaleString('vi-VN')} VND</strong>.
-                   </p>
-                </div>
-             </div>
-          </div>
+      <div className="absolute inset-0 z-[100] flex flex-col font-body max-h-[100dvh] overflow-hidden bg-white">
 
-             {/* Header */}
-            <div className="bg-[#2f66ee] text-white px-4 py-4 flex items-center justify-between shadow-sm shrink-0">
-                <div className="w-8"></div>
-                <h1 className="font-bold text-lg font-headline">Transaction Result</h1>
-                <div className="w-8"></div>
-            </div>
-
-            <div className="flex-1 flex flex-col items-center px-4 pt-12 overflow-y-auto w-full">
-                {/* Success Icon Animation */}
-                <div className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center mb-6 relative shadow-[0_0_0_10px_rgba(220,252,231,0.5)]">
-                    <div className="absolute inset-0 rounded-full border-4 border-green-500 animate-pulse"></div>
-                    <span className="material-symbols-outlined text-green-500" style={{fontSize: '56px', fontVariationSettings: "'FILL' 1, 'wght' 700"}}>check_circle</span>
-                </div>
-
-                <h2 className="text-2xl font-bold text-gray-800 text-center mb-1 font-headline">Transfer<br/>Successful</h2>
-                <div className="text-center font-bold text-gray-400 text-sm mb-8">{new Date().toLocaleString('en-US')}</div>
-
-                <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 w-full mb-6">
-                    <div className="flex flex-col items-center border-b border-dashed border-gray-200 pb-5 mb-5 w-full">
-                        <span className="text-sm font-bold text-gray-500 mb-2 uppercase">Transfer Amount</span>
-                        <span className="text-4xl font-extrabold text-[#2f66ee] font-headline">
-                             {amount || "100.000"} <span className="text-xl">VND</span>
-                        </span>
-                    </div>
-
-                    <div className="flex flex-col gap-4 w-full">
-                        <div className="flex justify-between items-start">
-                            <span className="text-gray-500 text-[13px] w-24 shrink-0 font-medium tracking-wide">Recipient</span>
-                            <span className="font-bold text-gray-800 text-right leading-tight max-w-[200px]">NGUYEN XUAN TRUNG</span>
-                        </div>
-                         <div className="flex justify-between items-start">
-                            <span className="text-gray-500 text-[13px] w-24 shrink-0 font-medium tracking-wide">Bank</span>
-                            <span className="font-bold text-gray-800 text-right leading-tight max-w-[200px]">Shinhan Bank Vietnam</span>
-                        </div>
-                        <div className="flex justify-between items-start">
-                            <span className="text-gray-500 text-[13px] w-24 shrink-0 font-medium tracking-wide">Account Number</span>
-                            <span className="font-bold text-[#2f66ee] text-right font-mono text-[15px]">{accountNo || "1983021980823"}</span>
-                        </div>
-                         <div className="flex justify-between items-start">
-                            <span className="text-gray-500 text-[13px] w-24 shrink-0 font-medium tracking-wide">Memo</span>
-                            <span className="font-bold text-gray-800 text-right text-sm leading-tight max-w-[200px] break-words">
-                                {content}
-                            </span>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="flex gap-4 w-full mt-auto mb-4" style={{ maxWidth: '480px', margin: '0 auto' }}>
-                   <div className="w-full">
-                        <button 
-                            onClick={onSuccessReturnHome}
-                            className="w-full bg-[#2f66ee] text-white font-bold py-4 rounded-xl shadow-lg hover:opacity-95 active:scale-[0.98] transition-all uppercase tracking-wide text-sm"
-                        >
-                            Back to Home
-                        </button>
-                    </div>
-                </div>
-            </div>
+        {/* ── HEADER (Shinhan style) ── */}
+        <div className="bg-[#2f66ee] text-white px-4 py-4 flex items-center justify-between shrink-0">
+          <div className="w-8" />
+          <h1 className="font-bold text-[16px]">Giao dịch thành công</h1>
+          <button onClick={onSuccessReturnHome} className="p-1 rounded-full hover:bg-white/10 transition-colors">
+            <span className="material-symbols-outlined text-xl">home</span>
+          </button>
         </div>
+
+        {/* ── MAIN SCROLL AREA ── */}
+        <div className="flex-1 overflow-y-auto bg-[#f5f6fa]">
+
+          {/* Success card — Shinhan style */}
+          <div className="bg-white mx-4 mt-5 mb-3 rounded-2xl shadow-sm overflow-hidden border border-gray-100">
+            {/* Top success section */}
+            <div className="flex flex-col items-center pt-8 pb-6 px-4">
+              {/* Simple green check — exactly like Shinhan */}
+              <div className="w-16 h-16 rounded-full bg-green-500 flex items-center justify-center mb-4 shadow-lg shadow-green-100">
+                <span className="material-symbols-outlined text-white" style={{fontSize: '38px', fontVariationSettings: "'FILL' 1, 'wght' 700"}}>check</span>
+              </div>
+              <h2 className="text-[18px] font-bold text-gray-800 mb-1">Transfer Successful</h2>
+              <p className="text-gray-400 text-[12px] mb-5">{successTimestamp}</p>
+              {/* Amount — Shinhan blue bold */}
+              <p className="text-[32px] font-extrabold text-[#2f66ee] tracking-tight">
+                {amount || '0'} <span className="text-[20px] font-bold text-[#2f66ee]">VND</span>
+              </p>
+            </div>
+
+            {/* Divider with scissor icon (Shinhan-like receipt cut) */}
+            <div className="relative flex items-center px-4 py-1">
+              <div className="flex-1 border-t border-dashed border-gray-200" />
+              <div className="mx-2 w-5 h-5 bg-[#f5f6fa] rounded-full flex items-center justify-center -mx-2.5 border border-gray-100 shrink-0 z-10">
+                <span className="material-symbols-outlined text-gray-300 text-[12px]">content_cut</span>
+              </div>
+              <div className="flex-1 border-t border-dashed border-gray-200" />
+            </div>
+
+            {/* Receipt rows */}
+            <div className="px-5 py-4 flex flex-col gap-3.5">
+              {[
+                { label: 'Recipient', value: 'NGUYEN XUAN TRUNG', bold: true },
+                { label: 'Bank', value: selectedBank.name, bold: false },
+                { label: 'Account No.', value: accountNo || '1983021980823', blue: true, mono: true },
+                { label: 'Memo', value: content, bold: false, wrap: true },
+                { label: 'Transaction Fee', value: 'FREE', green: true },
+              ].map(row => (
+                <div key={row.label} className={`flex justify-between ${row.wrap ? 'items-start' : 'items-center'}`}>
+                  <span className="text-gray-400 text-[13px]">{row.label}</span>
+                  <span className={`text-[13px] text-right max-w-[200px] ${row.wrap ? 'break-words leading-snug' : ''} ${row.bold ? 'font-bold text-gray-800' : ''} ${row.blue ? 'font-bold text-[#2f66ee] font-mono' : ''} ${row.green ? 'font-bold text-green-600' : ''} ${!row.bold && !row.blue && !row.green ? 'text-gray-800 font-medium' : ''}`}>
+                    {row.value}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Bottom action toolbar — Shinhan style */}
+          <div className="flex justify-around items-center bg-white mx-4 rounded-2xl py-3 shadow-sm border border-gray-100 mb-5">
+            {[
+              { icon: 'bookmark', label: 'Lưu mẫu' },
+              { icon: 'image', label: 'Tải ảnh' },
+              { icon: 'share', label: 'Chia sẻ' },
+              { icon: 'info', label: 'Chi tiết' },
+            ].map(item => (
+              <button key={item.icon} className="flex flex-col items-center gap-1 px-3 py-1 hover:bg-gray-50 rounded-xl transition-colors">
+                <span className="material-symbols-outlined text-gray-500 text-[22px]">{item.icon}</span>
+                <span className="text-[11px] text-gray-500 font-medium">{item.label}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* Main action button */}
+          <div className="px-4 pb-8">
+            <button
+              onClick={onSuccessReturnHome}
+              className="w-full bg-[#2f66ee] text-white font-bold py-4 rounded-xl shadow-md shadow-blue-100 hover:opacity-95 active:scale-[0.98] transition-all text-[15px]"
+            >
+              Giao dịch khác
+            </button>
+          </div>
+        </div>
+      </div>
     );
   }
 
