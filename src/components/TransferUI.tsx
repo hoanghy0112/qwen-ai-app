@@ -88,11 +88,21 @@ export default function TransferUI({ onBack, onSuccessReturnHome, onOpenAdvisor,
   const [successTimestamp, setSuccessTimestamp] = useState('');
   // Loading state khi đang chờ tín hiệu mạng ở bước Confirm
   const [isConfirmLoading, setIsConfirmLoading] = useState(false);
+  const [isContinueLoading, setIsContinueLoading] = useState(false);
+  const [isOtpConfirmLoading, setIsOtpConfirmLoading] = useState(false);
   // Advisor background pipeline state
   type AdvisorStatus = 'idle' | 'fetching' | 'ready' | 'failed';
   const [advisorStatus, setAdvisorStatus] = useState<AdvisorStatus>('idle');
   const prefetchedAudioUrl = React.useRef<string | null>(null);
   const advisorShownRef = React.useRef(false);
+
+  // ── Reward Animation State (Step 4) ──
+  // Phase 0: initial, 1: success anim started, 2: reward card visible, 3: advisor card visible
+  const [rewardPhase, setRewardPhase] = useState<0 | 1 | 2 | 3>(0);
+  const [countUpAmount, setCountUpAmount] = useState(0);
+  // Refs for cleanup — tránh memory leak khi unmount giữa animation
+  const rewardTimersRef = React.useRef<ReturnType<typeof setTimeout>[]>([]);
+  const rafRef = React.useRef<number | null>(null);
 
   const selectedBank = BANKS.find(b => b.code === selectedBankCode) ?? BANKS[0];
 
@@ -131,14 +141,65 @@ export default function TransferUI({ onBack, onSuccessReturnHome, onOpenAdvisor,
     }
   }, [step, otpTrigger]);
 
+  // ── Step 4: Reward animation sequence + count-up ──
   useEffect(() => {
     if (step === 4) {
       advisorShownRef.current = false;
-      const initTimer = setTimeout(() => setAllowTransition(true), 50);
-      return () => clearTimeout(initTimer);
+      const timers = rewardTimersRef.current;
+
+      // Reset states
+      setRewardPhase(0);
+      setCountUpAmount(0);
+
+      // Phase 1: start success animation immediately
+      const t0 = setTimeout(() => {
+        setAllowTransition(true);
+        setRewardPhase(1);
+      }, 50);
+      timers.push(t0);
+
+      // Count-up animation (0 → actual amount over ~1.5s)
+      const actualAmount = parseFloat(amount.replace(/[^\d]/g, '')) || 0;
+      const countUpDuration = 1500; // ms
+      const startTime = performance.now() + 100; // slight delay for mount
+      const animateCountUp = (now: number) => {
+        const elapsed = now - startTime;
+        if (elapsed < 0) {
+          rafRef.current = requestAnimationFrame(animateCountUp);
+          return;
+        }
+        const progress = Math.min(elapsed / countUpDuration, 1);
+        // ease-out cubic
+        const eased = 1 - Math.pow(1 - progress, 3);
+        setCountUpAmount(Math.round(actualAmount * eased));
+        if (progress < 1) {
+          rafRef.current = requestAnimationFrame(animateCountUp);
+        }
+      };
+      rafRef.current = requestAnimationFrame(animateCountUp);
+
+      // Phase 2: reward card slides in at 2s
+      const t1 = setTimeout(() => setRewardPhase(2), 2000);
+      timers.push(t1);
+
+      // Phase 3: advisor card at 5s (or whenever ready after 5s)
+      const t2 = setTimeout(() => setRewardPhase(3), 5000);
+      timers.push(t2);
+
+      return () => {
+        // Cleanup ALL timers + rAF on unmount/step change
+        timers.forEach(clearTimeout);
+        rewardTimersRef.current = [];
+        if (rafRef.current !== null) {
+          cancelAnimationFrame(rafRef.current);
+          rafRef.current = null;
+        }
+      };
     } else {
       setShowAvatarNotif(false);
       setShowAdvisorToast(false);
+      setRewardPhase(0);
+      setCountUpAmount(0);
       return undefined;
     }
   }, [step]);
@@ -174,7 +235,7 @@ export default function TransferUI({ onBack, onSuccessReturnHome, onOpenAdvisor,
     latency_ms: 1200
   };
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
     // Validate account number
     const trimmedAccount = accountNo.trim();
     if (!trimmedAccount) {
@@ -199,6 +260,9 @@ export default function TransferUI({ onBack, onSuccessReturnHome, onOpenAdvisor,
     }
 
     setErrorMsg('');
+    setIsContinueLoading(true);
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    setIsContinueLoading(false);
     setAllowTransition(false);
     setStep(2);
 
@@ -207,10 +271,12 @@ export default function TransferUI({ onBack, onSuccessReturnHome, onOpenAdvisor,
   };
 
   // ─── Background pipeline: API → script → TTS → blob URL ───────────────────
+  // Flow 1A is already warmed server-side (BankUI calls classify-product on Transfer click)
+  // So Flow 2 internally gets a cache hit on 1A → faster overall
   const prefetchAdvisor = async (amountVal: number) => {
     setAdvisorStatus('fetching');
     try {
-      // Step 1: Get recommend script
+      // Step 1: Get recommend script (Flow 2 = Flow 1A + NBA + Flow 4)
       let script = '';
       if (USE_MOCK) {
         await new Promise(r => setTimeout(r, 800));
@@ -255,7 +321,7 @@ export default function TransferUI({ onBack, onSuccessReturnHome, onOpenAdvisor,
   const handleConfirmReview = async () => {
     // Hiện loading 3s (chờ tín hiệu mạng lấy OTP)
     setIsConfirmLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 3000));
+    await new Promise(resolve => setTimeout(resolve, 2000));
     setIsConfirmLoading(false);
     setAllowTransition(false);
     setCountdown(59);
@@ -269,8 +335,12 @@ export default function TransferUI({ onBack, onSuccessReturnHome, onOpenAdvisor,
     setOtpTrigger(prev => prev + 1);
   };
 
-  const handleConfirmOtp = () => {
+  const handleConfirmOtp = async () => {
+    if (isOtpConfirmLoading) return;
     const amountVal = parseFloat(amount.replace(/[^\d]/g, '')) || 0;
+    setIsOtpConfirmLoading(true);
+    await new Promise(resolve => setTimeout(resolve, 3000));
+    setIsOtpConfirmLoading(false);
     setSuccessTimestamp(new Date().toLocaleString('en-US'));
     setAllowTransition(false);
     setBalance(prev => prev - amountVal);
@@ -495,9 +565,19 @@ export default function TransferUI({ onBack, onSuccessReturnHome, onOpenAdvisor,
         <div className="fixed bottom-0 left-0 w-full p-4 bg-gray-50/90 backdrop-blur-md pb-6 shrink-0 z-20 shadow-[0_-10px_20px_-10px_rgba(0,0,0,0.05)] border-t border-gray-100" style={{ maxWidth: '480px', transform: 'translateX(-50%)', left: '50%' }}>
           <button 
             onClick={handleContinue}
-            className="w-full bg-[#2f66ee] text-white font-bold py-4 rounded-xl shadow-lg hover:opacity-95 active:scale-[0.98] transition-all uppercase tracking-wide text-sm"
+            disabled={isContinueLoading}
+            className={`w-full font-bold py-4 rounded-xl shadow-lg transition-all uppercase tracking-wide text-sm flex items-center justify-center gap-2 ${
+              isContinueLoading
+                ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                : 'bg-[#2f66ee] text-white hover:opacity-95 active:scale-[0.98]'
+            }`}
           >
-            CONTINUE
+            {isContinueLoading ? (
+              <>
+                <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                Processing...
+              </>
+            ) : 'CONTINUE'}
           </button>
         </div>
       </div>
@@ -598,7 +678,7 @@ export default function TransferUI({ onBack, onSuccessReturnHome, onOpenAdvisor,
               </div>
               <div className="text-center">
                 <p className="font-bold text-gray-800 text-[16px] mb-1">Waiting for network signal</p>
-                <p className="text-gray-500 text-[13px]">Đang chờ tín hiệu mạng để{"\n"}gửi mã OTP xác thực...</p>
+                <p className="text-gray-500 text-[13px]">Waiting for network signal to send OTP verification code...</p>
               </div>
               {/* Progress dots */}
               <div className="flex gap-1.5">
@@ -694,14 +774,19 @@ export default function TransferUI({ onBack, onSuccessReturnHome, onOpenAdvisor,
             {/* Fix 3: disabled khi chưa đủ 6 số OTP */}
             <button
                 onClick={handleConfirmOtp}
-                disabled={!isOtpComplete}
-                className={`w-full font-bold py-4 rounded-xl shadow-lg transition-all uppercase tracking-wide text-sm ${
-                  isOtpComplete
+                disabled={!isOtpComplete || isOtpConfirmLoading}
+                className={`w-full font-bold py-4 rounded-xl shadow-lg transition-all uppercase tracking-wide text-sm flex items-center justify-center gap-2 ${
+                  isOtpComplete && !isOtpConfirmLoading
                     ? 'bg-[#2f66ee] text-white hover:opacity-95 active:scale-[0.98]'
                     : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                 }`}
             >
-              Confirm
+              {isOtpConfirmLoading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                  Processing...
+                </>
+              ) : 'Confirm'}
             </button>
           </div>
         </div>
@@ -709,13 +794,62 @@ export default function TransferUI({ onBack, onSuccessReturnHome, onOpenAdvisor,
   }
 
   if (step === 4) {
+    // ── Computed values for reward card ──
+    const actualAmount = parseFloat(amount.replace(/[^\d]/g, '')) || 0;
+    const pointsEarned = Math.floor(actualAmount / 100_000); // 1 point per 100k VND
+    const currentTotalPoints = 342; // mock: user's existing points
+    const newTotalPoints = currentTotalPoints + pointsEarned;
+    const goldThreshold = 500;
+    const pointsToGold = Math.max(0, goldThreshold - newTotalPoints);
+    const tierProgress = Math.min((newTotalPoints / goldThreshold) * 100, 100);
+    const tierName = newTotalPoints >= goldThreshold ? 'Gold' : 'Silver';
+
+    // SVG ring params
+    const ringRadius = 28;
+    const ringCircumference = 2 * Math.PI * ringRadius;
+    const ringOffset = ringCircumference - (ringCircumference * Math.min(tierProgress, 100)) / 100;
+
     return (
       <div className="absolute inset-0 z-[100] flex flex-col font-body max-h-[100dvh] overflow-hidden bg-white">
+        {/* ── CSS Keyframes ── */}
+        <style>{`
+          @keyframes s4-check-pop {
+            0%   { transform: scale(0); opacity: 0; }
+            50%  { transform: scale(1.2); }
+            100% { transform: scale(1);  opacity: 1; }
+          }
+          @keyframes s4-fade-up {
+            from { transform: translateY(16px); opacity: 0; }
+            to   { transform: translateY(0);    opacity: 1; }
+          }
+          @keyframes s4-slide-up {
+            from { transform: translateY(40px); opacity: 0; }
+            to   { transform: translateY(0);    opacity: 1; }
+          }
+          @keyframes s4-ring-fill {
+            from { stroke-dashoffset: ${ringCircumference}; }
+            to   { stroke-dashoffset: ${ringOffset}; }
+          }
+          @keyframes s4-shimmer {
+            0%   { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+          }
+          @keyframes s4-points-pop {
+            0%   { transform: scale(0.5); opacity: 0; }
+            60%  { transform: scale(1.15); }
+            100% { transform: scale(1);   opacity: 1; }
+          }
+          .s4-shimmer-bg {
+            background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+            background-size: 200% 100%;
+            animation: s4-shimmer 1.5s ease-in-out infinite;
+          }
+        `}</style>
 
         {/* ── HEADER (Shinhan style) ── */}
         <div className="bg-[#2f66ee] text-white px-4 py-4 flex items-center justify-between shrink-0">
           <div className="w-8" />
-          <h1 className="font-bold text-[16px]">Giao dịch thành công</h1>
+          <h1 className="font-bold text-[16px]">Successful Transfer</h1>
           <button onClick={onSuccessReturnHome} className="p-1 rounded-full hover:bg-white/10 transition-colors">
             <span className="material-symbols-outlined text-xl">home</span>
           </button>
@@ -724,23 +858,35 @@ export default function TransferUI({ onBack, onSuccessReturnHome, onOpenAdvisor,
         {/* ── MAIN SCROLL AREA ── */}
         <div className="flex-1 overflow-y-auto bg-[#f5f6fa]">
 
-          {/* Success card — Shinhan style */}
+          {/* ═══ SUCCESS CARD ═══ */}
           <div className="bg-white mx-4 mt-5 mb-3 rounded-2xl shadow-sm overflow-hidden border border-gray-100">
             {/* Top success section */}
             <div className="flex flex-col items-center pt-8 pb-6 px-4">
-              {/* Simple green check — exactly like Shinhan */}
-              <div className="w-16 h-16 rounded-full bg-green-500 flex items-center justify-center mb-4 shadow-lg shadow-green-100">
+              {/* Animated green check */}
+              <div
+                className="w-16 h-16 rounded-full bg-green-500 flex items-center justify-center mb-4 shadow-lg shadow-green-100"
+                style={{ animation: rewardPhase >= 1 ? 's4-check-pop 0.5s cubic-bezier(0.34,1.56,0.64,1) forwards' : 'none', opacity: rewardPhase >= 1 ? 1 : 0 }}
+              >
                 <span className="material-symbols-outlined text-white" style={{fontSize: '38px', fontVariationSettings: "'FILL' 1, 'wght' 700"}}>check</span>
               </div>
-              <h2 className="text-[18px] font-bold text-gray-800 mb-1">Transfer Successful</h2>
-              <p className="text-gray-400 text-[12px] mb-5">{successTimestamp}</p>
-              {/* Amount — Shinhan blue bold */}
-              <p className="text-[32px] font-extrabold text-[#2f66ee] tracking-tight">
-                {amount || '0'} <span className="text-[20px] font-bold text-[#2f66ee]">VND</span>
+              <h2
+                className="text-[18px] font-bold text-gray-800 mb-1"
+                style={{ animation: rewardPhase >= 1 ? 's4-fade-up 0.4s 0.2s ease-out both' : 'none', opacity: 0 }}
+              >Transfer Successful</h2>
+              <p
+                className="text-gray-400 text-[12px] mb-5"
+                style={{ animation: rewardPhase >= 1 ? 's4-fade-up 0.4s 0.35s ease-out both' : 'none', opacity: 0 }}
+              >{successTimestamp}</p>
+              {/* Amount — count-up animation */}
+              <p
+                className="text-[32px] font-extrabold text-[#2f66ee] tracking-tight tabular-nums"
+                style={{ animation: rewardPhase >= 1 ? 's4-fade-up 0.4s 0.5s ease-out both' : 'none', opacity: 0 }}
+              >
+                {countUpAmount.toLocaleString('vi-VN')} <span className="text-[20px] font-bold text-[#2f66ee]">VND</span>
               </p>
             </div>
 
-            {/* Divider with scissor icon (Shinhan-like receipt cut) */}
+            {/* Divider with scissor icon */}
             <div className="relative flex items-center px-4 py-1">
               <div className="flex-1 border-t border-dashed border-gray-200" />
               <div className="mx-2 w-5 h-5 bg-[#f5f6fa] rounded-full flex items-center justify-center -mx-2.5 border border-gray-100 shrink-0 z-10">
@@ -769,12 +915,12 @@ export default function TransferUI({ onBack, onSuccessReturnHome, onOpenAdvisor,
           </div>
 
           {/* Bottom action toolbar — Shinhan style */}
-          <div className="flex justify-around items-center bg-white mx-4 rounded-2xl py-3 shadow-sm border border-gray-100 mb-5">
+          <div className="flex justify-around items-center bg-white mx-4 rounded-2xl py-3 shadow-sm border border-gray-100 mb-3">
             {[
-              { icon: 'bookmark', label: 'Lưu mẫu' },
-              { icon: 'image', label: 'Tải ảnh' },
-              { icon: 'share', label: 'Chia sẻ' },
-              { icon: 'info', label: 'Chi tiết' },
+              { icon: 'bookmark', label: 'Save' },
+              { icon: 'image', label: 'Image' },
+              { icon: 'share', label: 'Share' },
+              { icon: 'info', label: 'Details' },
             ].map(item => (
               <button key={item.icon} className="flex flex-col items-center gap-1 px-3 py-1 hover:bg-gray-50 rounded-xl transition-colors">
                 <span className="material-symbols-outlined text-gray-500 text-[22px]">{item.icon}</span>
@@ -783,13 +929,143 @@ export default function TransferUI({ onBack, onSuccessReturnHome, onOpenAdvisor,
             ))}
           </div>
 
-          {/* Main action button */}
+          {/* ═══ REWARD CARD (Phase 2+) ═══ */}
+          {rewardPhase >= 2 && (
+            <div
+              className="mx-4 mb-3 rounded-2xl overflow-hidden border border-amber-100 shadow-sm"
+              style={{ animation: 's4-slide-up 0.5s cubic-bezier(0.16,1,0.3,1) forwards' }}
+            >
+              {/* Gradient header */}
+              <div className="bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 px-4 py-3 flex items-center gap-2">
+                <span className="material-symbols-outlined text-white text-[20px]" style={{fontVariationSettings: "'FILL' 1"}}>stars</span>
+                <span className="text-white font-bold text-[13px] tracking-wide uppercase">Shinhan Rewards</span>
+              </div>
+
+              <div className="bg-white px-4 py-5">
+                <div className="flex items-center gap-4">
+                  {/* SVG Ring progress */}
+                  <div className="relative shrink-0" style={{width: 72, height: 72}}>
+                    <svg width="72" height="72" viewBox="0 0 72 72" className="transform -rotate-90">
+                      {/* Background ring */}
+                      <circle cx="36" cy="36" r={ringRadius} fill="none" stroke="#f3f4f6" strokeWidth="5" />
+                      {/* Progress ring */}
+                      <circle
+                        cx="36" cy="36" r={ringRadius}
+                        fill="none" stroke="url(#reward-gradient)" strokeWidth="5"
+                        strokeLinecap="round"
+                        strokeDasharray={ringCircumference}
+                        strokeDashoffset={ringCircumference}
+                        style={{ animation: 's4-ring-fill 1.2s 0.3s ease-out forwards' }}
+                      />
+                      <defs>
+                        <linearGradient id="reward-gradient" x1="0" y1="0" x2="1" y2="1">
+                          <stop offset="0%" stopColor="#f59e0b" />
+                          <stop offset="100%" stopColor="#ef4444" />
+                        </linearGradient>
+                      </defs>
+                    </svg>
+                    {/* Center text */}
+                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                      <span className="text-[11px] font-bold text-amber-600">{tierName}</span>
+                    </div>
+                  </div>
+
+                  {/* Points info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-baseline gap-1.5 mb-1">
+                      <span className="text-[11px] text-gray-500 font-medium">You earned</span>
+                      <span
+                        className="text-[22px] font-extrabold text-amber-600 tabular-nums"
+                        style={{ animation: 's4-points-pop 0.5s 0.5s cubic-bezier(0.34,1.56,0.64,1) both' }}
+                      >+{pointsEarned}</span>
+                      <span className="text-[11px] text-gray-500 font-medium">points</span>
+                    </div>
+
+                    {/* Tier progress bar */}
+                    <div className="mb-1.5">
+                      <div className="flex justify-between text-[10px] mb-1">
+                        <span className="text-gray-400 font-medium">Silver</span>
+                        <span className="text-amber-500 font-bold">Gold</span>
+                      </div>
+                      <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-gradient-to-r from-amber-400 to-amber-500 rounded-full transition-all duration-1000 ease-out"
+                          style={{ width: `${tierProgress}%`, transitionDelay: '0.6s' }}
+                        />
+                      </div>
+                    </div>
+
+                    {pointsToGold > 0 ? (
+                      <p className="text-[11px] text-gray-500">
+                        <span className="font-bold text-amber-600">{pointsToGold}</span> points to Gold tier
+                      </p>
+                    ) : (
+                      <p className="text-[11px] font-bold text-amber-600">Congratulations! Gold tier reached!</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ═══ INLINE AI ADVISOR CARD (Phase 3+) ═══ */}
+          {rewardPhase >= 3 && advisorStatus !== 'failed' && (
+            <div
+              className="mx-4 mb-5"
+              style={{ animation: 's4-slide-up 0.5s cubic-bezier(0.16,1,0.3,1) forwards' }}
+            >
+              {(advisorStatus === 'ready') || (advisorStatus === 'idle' && recommendScript) ? (
+                /* ── Ready: full advisor card ── */
+                <button
+                  onClick={() => {
+                    const audioUrl = prefetchedAudioUrl.current;
+                    const script = recommendScript;
+                    if (audioUrl && script) {
+                      onOpenAdvisor(`__AUDIO__${audioUrl}||${script}`);
+                    } else if (script) {
+                      onOpenAdvisor(script);
+                    }
+                  }}
+                  className="w-full bg-gradient-to-r from-[#2f66ee] to-[#1a8cff] rounded-2xl px-4 py-4 shadow-[0_8px_30px_rgba(47,102,238,0.25)] flex items-center gap-3 text-left active:scale-[0.98] transition-transform border border-blue-400/20"
+                >
+                  <div className="relative shrink-0">
+                    <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
+                      <span className="material-symbols-outlined text-white text-[26px]">robot_2</span>
+                    </div>
+                    <div className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-green-400 rounded-full border-2 border-[#2f66ee] animate-pulse" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold text-white text-[14px] mb-0.5">AI Advisor has a tip for you</p>
+                    <p className="text-white/70 text-[12px] leading-snug line-clamp-2">{recommendScript || 'Tap to hear your personalized recommendation'}</p>
+                  </div>
+                  <div className="shrink-0">
+                    <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
+                      <span className="material-symbols-outlined text-white text-[20px]">play_arrow</span>
+                    </div>
+                  </div>
+                </button>
+              ) : advisorStatus === 'fetching' ? (
+                /* ── Loading: skeleton shimmer ── */
+                <div className="w-full bg-white rounded-2xl px-4 py-4 shadow-sm border border-gray-100 flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-xl s4-shimmer-bg shrink-0" />
+                  <div className="flex-1 flex flex-col gap-2">
+                    <div className="h-3.5 w-3/4 rounded-full s4-shimmer-bg" />
+                    <div className="h-3 w-full rounded-full s4-shimmer-bg" />
+                    <div className="h-3 w-1/2 rounded-full s4-shimmer-bg" />
+                  </div>
+                  <div className="w-10 h-10 rounded-full s4-shimmer-bg shrink-0" />
+                </div>
+              ) : null}
+            </div>
+          )}
+
+          {/* ═══ MAIN ACTION BUTTON ═══ */}
           <div className="px-4 pb-8">
             <button
               onClick={onSuccessReturnHome}
               className="w-full bg-[#2f66ee] text-white font-bold py-4 rounded-xl shadow-md shadow-blue-100 hover:opacity-95 active:scale-[0.98] transition-all text-[15px]"
             >
-              Giao dịch khác
+              Other Transactions
             </button>
           </div>
         </div>

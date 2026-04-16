@@ -73,6 +73,7 @@ export default function AiAssistantWidget({ textToSpeak, preloadedAudioUrl, onAu
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [displayedText, setDisplayedText] = useState('');
+  const [lastSpokenText, setLastSpokenText] = useState('');
   const analyserRef = useRef<AnalyserNode | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
@@ -204,21 +205,37 @@ export default function AiAssistantWidget({ textToSpeak, preloadedAudioUrl, onAu
     }
   }, [textToSpeak, preloadedAudioUrl]);
 
-  // Typewriter effect: hiện text từng ký tự theo tốc độ nói (~15 chars/s)
+  const hasStartedTypingRef = useRef(false);
+
+  // Clear text when textToSpeak changes to wait for audio
   useEffect(() => {
-    if (!textToSpeak) {
-      setDisplayedText('');
-      return;
-    }
+    hasStartedTypingRef.current = false;
     setDisplayedText('');
-    let i = 0;
-    const interval = setInterval(() => {
-      i++;
-      setDisplayedText(textToSpeak.slice(0, i));
-      if (i >= textToSpeak.length) clearInterval(interval);
-    }, 65); // ~15 ký tự/giây ≈ tốc độ TTS bình thường
-    return () => clearInterval(interval);
   }, [textToSpeak]);
+
+  // Typewriter effect: đồng bộ hiển thị text với audio khi bắt đầu nói
+  useEffect(() => {
+    if (!textToSpeak) return;
+
+    if (isActuallyTalking) {
+      hasStartedTypingRef.current = true;
+      setDisplayedText('');
+      let i = 0;
+      const interval = setInterval(() => {
+        i++;
+        setDisplayedText(textToSpeak.slice(0, i));
+        if (i >= textToSpeak.length) clearInterval(interval);
+      }, 65); // ~15 ký tự/giây ≈ tốc độ TTS bình thường
+      return () => clearInterval(interval);
+    } else {
+      // Audio đã dừng hoặc chưa bắt đầu
+      if (hasStartedTypingRef.current) {
+        // Nếu đã bắt đầu nói nhưng giờ ngừng lại (nghĩa là audio đã xong), hiển thị full text
+        setDisplayedText(textToSpeak);
+        setLastSpokenText(textToSpeak); // Lưu lại để không biến mất
+      }
+    }
+  }, [isActuallyTalking, textToSpeak]);
 
   const handleAvatarClick = () => {
     setTriggerCount(c => c + 1);
@@ -254,9 +271,9 @@ export default function AiAssistantWidget({ textToSpeak, preloadedAudioUrl, onAu
           </Canvas>
         </div>
 
-        {displayedText && (
+        {(displayedText || lastSpokenText) && (
           <div style={{ position: 'absolute', bottom: '20px', left: '20px', right: '20px', background: 'white', padding: '16px', borderRadius: '16px', boxShadow: '0 8px 30px rgba(0,0,0,0.08)', fontWeight: 500, fontSize: '0.95rem', lineHeight: 1.5, textAlign: 'center', border: '1px solid #eee' }}>
-            {displayedText}
+            {displayedText || lastSpokenText}
           </div>
         )}
       </div>
