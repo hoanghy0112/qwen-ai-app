@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import AiAssistantWidget from "../components/AiAssistantWidget";
 import TransferUI from "../components/TransferUI";
 import AccountUI from "../components/AccountUI";
+import InvestmentUI from "../components/InvestmentUI";
 
 export default function BankUI() {
   const [notification, setNotification] = useState("");
@@ -13,6 +14,48 @@ export default function BankUI() {
   // ── Global persistent notifications ──
   const [globalDeductToast, setGlobalDeductToast] = useState<{ show: boolean; amount: string; remaining: number } | null>(null);
   const [globalAdvisorToast, setGlobalAdvisorToast] = useState<{ show: boolean; audioUrl: string | null; script: string } | null>(null);
+  const [simulationAlert, setSimulationAlert] = useState<{ stock_code: string; status: string; message: string } | null>(null);
+
+  // ── Fix 3: Warm Flow 1A ngay khi BankUI mount (trang Home) ──
+  // 90% user sẽ vào Transfer → pre-warm sớm giúp Flow 2 luôn hit cache.
+  // Backend đã có request coalescing (Fix 3 server) nên dù FE gọi 2 lần cũng chỉ 1 LLM call.
+  const flow1aWarmed = React.useRef(false);
+
+  const warmFlow1ACache = () => {
+    if (flow1aWarmed.current) return;
+    flow1aWarmed.current = true;
+
+    // Fire-and-forget: warm the server-side Flow 1A TTL cache
+    fetch('/api/flows/classify-product', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_token: 'user_12345' })
+    })
+      .then(res => res.json())
+      .then(data => console.log('[Flow 1A warm] Segment cached:', data.spending_segment))
+      .catch(err => console.warn('[Flow 1A warm] Failed (non-critical):', err));
+  };
+
+  // Gọi warm ngay khi component mount (trang Home load)
+  React.useEffect(() => {
+    warmFlow1ACache();
+  }, []);
+
+  // Simulation Alert Polling
+  React.useEffect(() => {
+    const pollInterval = setInterval(async () => {
+      try {
+        const res = await fetch('/api/simulation/check');
+        const data = await res.json();
+        if (data && data.alert) {
+          setSimulationAlert(data.alert);
+        }
+      } catch (e) {
+        // Silently fail if server is down
+      }
+    }, 4000); // Check every 4 seconds
+    return () => clearInterval(pollInterval);
+  }, []);
 
   const handleTransactionComplete = (amount: string) => {
     setGlobalDeductToast({ show: true, amount, remaining: balance });
@@ -26,6 +69,7 @@ export default function BankUI() {
 
   const handleServiceClick = (serviceName: string) => {
     if (serviceName === "Transfer") {
+      warmFlow1ACache(); // Fallback warm nếu useEffect chưa kịp chạy (edge case)
       setActiveTab("Transfer");
       return;
     }
@@ -35,6 +79,10 @@ export default function BankUI() {
     }
     if (serviceName === "Payments") {
       setShowPaymentMenu(true);
+      return;
+    }
+    if (serviceName === "Investments") {
+      setActiveTab("Investments");
       return;
     }
     // Other services are currently disabled per user request
@@ -87,8 +135,8 @@ export default function BankUI() {
         {/* MAIN: TRANSFER UI */}
         {activeTab === "Transfer" && (
           <TransferUI 
-            onBack={() => setActiveTab("Home")} 
-            onSuccessReturnHome={() => setActiveTab("Home")} 
+            onBack={() => setActiveTab("Home")}
+            onSuccessReturnHome={() => setActiveTab("Home")}
             onOpenAdvisor={(msg) => {
               if (msg.startsWith('__AUDIO__')) {
                 const rest = msg.slice('__AUDIO__'.length);
@@ -119,6 +167,14 @@ export default function BankUI() {
           <AccountUI 
             onBack={() => setActiveTab("Home")} 
             balance={balance}
+          />
+        )}
+
+        {/* MAIN: INVESTMENT UI */}
+        {activeTab === "Investments" && (
+          <InvestmentUI 
+            balance={balance}
+            onBack={() => setActiveTab("Home")}
           />
         )}
 
@@ -313,6 +369,7 @@ export default function BankUI() {
       </main>
 
       {/* BOTTOM NAV */}
+      {activeTab !== "Investments" && (
       <nav
         className="fixed bottom-0 left-0 w-full flex justify-around items-center px-4 pt-3 pb-6 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl z-50 rounded-t-3xl shadow-[0_-12px_24px_-4px_rgba(0,0,0,0.06)]"
         style={{
@@ -412,6 +469,7 @@ export default function BankUI() {
           </span>
         </div>
       </nav>
+      )}
 
       {/* Payment Menu Bottom Sheet */}
       {showPaymentMenu && (
@@ -551,6 +609,30 @@ export default function BankUI() {
               >
                 <span className="material-symbols-outlined text-white text-[15px]">close</span>
               </button>
+            </div>
+          </button>
+        </div>
+      )}
+
+      {/* Simulation Market Alert toast - High priority warning style */}
+      {simulationAlert && (
+        <div className="g-toast" style={{ position:'fixed', top:10, left:'50%', width:'calc(100% - 24px)', maxWidth:456, zIndex:9002 }}>
+           <button
+            onClick={() => {
+              setSimulationAlert(null);
+              setActiveTab('Investments');
+            }}
+            className="w-full bg-gradient-to-r from-amber-500 to-orange-600 rounded-2xl px-4 py-3.5 shadow-[0_10px_35px_rgba(245,158,11,0.4)] flex items-center gap-3 text-left border border-amber-400/30 active:scale-[0.98] transition-transform animate-pulse"
+          >
+            <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+               <span className="material-symbols-outlined text-white text-[24px]" style={{fontVariationSettings: "'FILL' 1"}}>warning</span>
+            </div>
+            <div className="flex-1 min-w-0">
+               <p className="font-black text-white text-[10px] uppercase tracking-wider mb-0.5 opacity-90">Market Volatility Alert</p>
+               <p className="font-bold text-white text-[14px] leading-tight">{simulationAlert.message}</p>
+            </div>
+            <div className="shrink-0 w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
+              <span className="material-symbols-outlined text-white text-[18px]">chevron_right</span>
             </div>
           </button>
         </div>
