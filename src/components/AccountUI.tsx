@@ -52,7 +52,7 @@ export default function AccountUI({ onBack, balance }: AccountUIProps) {
                 <h3 className="font-bold text-gray-800 text-[14px]">Online Demand Deposit Account (VND)</h3>
                 <span className="material-symbols-outlined text-gray-800 text-[20px] font-bold">chevron_right</span>
               </div>
-              <p className="text-gray-400 text-[13px] mb-3">700-031-586225</p>
+              {/* <p className="text-gray-400 text-[13px] mb-3">700-031-586225</p> */}
               
               <div className="flex justify-between items-center mt-2">
                 <div className="flex items-center gap-2">

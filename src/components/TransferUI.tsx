@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { api } from '../lib/api';
 
 // Chuyển số VND sang dạng tiếng Anh đọc được cho TTS
 function amountToSpeakable(formattedAmount: string): string {
@@ -282,14 +283,10 @@ export default function TransferUI({ onBack, onSuccessReturnHome, onOpenAdvisor,
         await new Promise(r => setTimeout(r, 800));
         script = mockRecommendResponse.script;
       } else {
-        const res = await fetch('/api/flows/recommend', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            session_id: `session_${Date.now()}`,
-            user_token: 'user_12345',
-            transaction: { amount: amountVal, merchant: 'Transfer', category: 'transfer' }
-          })
+        const res = await api.post('/api/flows/recommend', {
+          session_id: `session_${Date.now()}`,
+          user_token: localStorage.getItem('token') || 'user_12345',
+          transaction: { amount: amountVal, merchant: 'Transfer', category: 'transfer' }
         });
         const data = await res.json();
         script = data?.script || '';
@@ -381,7 +378,7 @@ export default function TransferUI({ onBack, onSuccessReturnHome, onOpenAdvisor,
           <div className="bg-white px-5 py-4 shadow-sm mb-2 rounded-b-xl border-b border-gray-100">
             <h2 className="font-bold text-gray-800 text-[15px]">Online Demand Deposit Account (VND)</h2>
             <div className="flex items-center justify-between mt-1">
-              <span className="text-gray-500 text-sm">700-031-586225</span>
+              {/* <span className="text-gray-500 text-sm">700-031-586225</span> */}
               <span className="material-symbols-outlined text-gray-500 text-lg">keyboard_arrow_down</span>
             </div>
             <div className="flex items-center gap-2 mt-4">
@@ -607,7 +604,7 @@ export default function TransferUI({ onBack, onSuccessReturnHome, onOpenAdvisor,
              <div className="p-4 flex flex-col gap-4">
                <div>
                  <p className="text-gray-500 text-[12px] mb-0.5">From Account</p>
-                 <p className="font-bold text-gray-800 text-[14px]">700-031-586225</p>
+                 {/* <p className="font-bold text-gray-800 text-[14px]">700-031-586225</p> */}
                </div>
                <div>
                  <p className="text-gray-500 text-[12px] mb-0.5">Sender Name</p>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, Suspense } from 'react';
+import { api } from '../lib/api';
 import { Canvas, useThree } from '@react-three/fiber';
 import { Html, useProgress } from '@react-three/drei';
 import DigitalAvatar from './DigitalAvatar';
@@ -101,19 +102,15 @@ export default function AiAssistantWidget({ textToSpeak, preloadedAudioUrl, onAu
     setError(null);
 
     try {
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          session_id: `session_${Date.now()}`,
-          question: userText,
-          context: {
-            flow_type: 'recommend',
-            last_script: null,
-            product_id: null,
-            allocation: null
-          }
-        })
+      const response = await api.post('/api/chat', {
+        session_id: `session_${Date.now()}`,
+        question: userText,
+        context: {
+          flow_type: 'recommend',
+          last_script: null,
+          product_id: null,
+          allocation: null
+        }
       });
 
       if (!response.ok) {

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { api } from '../lib/api';
 
 // Interfaces for API response
 interface Flow3Response {
@@ -67,15 +68,11 @@ export default function InvestmentUI({ balance, onBack }: { balance: number; onB
     setResult(null);
 
     try {
-      const response = await fetch('/api/flows/invest', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          session_id: `session_${Date.now()}`,
-          user_token: 'user_123_mock',
-          stock_code: stockCode.toUpperCase(),
-          investment_amount: parseInt(amount.replace(/\D/g, ''), 10)
-        })
+      const response = await api.post('/api/flows/invest', {
+        session_id: `session_${Date.now()}`,
+        user_token: localStorage.getItem('token') || 'user_123_mock',
+        stock_code: stockCode.toUpperCase(),
+        investment_amount: parseInt(amount.replace(/\D/g, ''), 10)
       });
 
       if (!response.ok) {

@@ -3,13 +3,20 @@ import AiAssistantWidget from "../components/AiAssistantWidget";
 import TransferUI from "../components/TransferUI";
 import AccountUI from "../components/AccountUI";
 import InvestmentUI from "../components/InvestmentUI";
+import LoginUI from "../components/LoginUI";
+import PaymentHistoryUI from "../components/PaymentHistoryUI";
+import { api } from "../lib/api";
 
 export default function BankUI() {
   const [notification, setNotification] = useState("");
   const [activeTab, setActiveTab] = useState("Home");
   const [showPaymentMenu, setShowPaymentMenu] = useState(false);
-  const [balance, setBalance] = useState(15000000);
+  const [balance, setBalance] = useState(0);
   const [preloadedAudioUrl, setPreloadedAudioUrl] = useState<string | null>(null);
+  const [user, setUser] = useState<any>(null);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [showPaymentHistory, setShowPaymentHistory] = useState(false);
+  const [isCreatingDemo, setIsCreatingDemo] = useState(false);
 
   // ── Global persistent notifications ──
   const [globalDeductToast, setGlobalDeductToast] = useState<{ show: boolean; amount: string; remaining: number } | null>(null);
@@ -26,11 +33,7 @@ export default function BankUI() {
     flow1aWarmed.current = true;
 
     // Fire-and-forget: warm the server-side Flow 1A TTL cache
-    fetch('/api/flows/classify-product', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user_token: 'user_12345' })
-    })
+    api.post('/api/flows/classify-product', { user_token: 'user_12345' })
       .then(res => res.json())
       .then(data => console.log('[Flow 1A warm] Segment cached:', data.spending_segment))
       .catch(err => console.warn('[Flow 1A warm] Failed (non-critical):', err));
@@ -39,13 +42,14 @@ export default function BankUI() {
   // Gọi warm ngay khi component mount (trang Home load)
   React.useEffect(() => {
     warmFlow1ACache();
+    fetchProfile();
   }, []);
 
   // Simulation Alert Polling
   React.useEffect(() => {
     const pollInterval = setInterval(async () => {
       try {
-        const res = await fetch('/api/simulation/check');
+        const res = await api.get('/api/simulation/check');
         const data = await res.json();
         if (data && data.alert) {
           setSimulationAlert(data.alert);
@@ -67,6 +71,39 @@ export default function BankUI() {
     setGlobalAdvisorToast({ show: true, audioUrl, script });
   };
 
+  const fetchProfile = async () => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    try {
+      const res = await api.get('/api/auth/profile');
+      if (res.ok) {
+        const data = await res.json();
+        setUser({ user: data });
+        if (data.balance !== undefined) {
+          setBalance(data.balance);
+        }
+      } else {
+        localStorage.removeItem('token');
+        setUser(null);
+      }
+    } catch (err) {
+      console.error('Failed to fetch profile:', err);
+    }
+  };
+
+  const handleLoginSuccess = (userData: any) => {
+    setUser(userData);
+    setIsLoggingIn(false);
+    if (userData.user?.balance !== undefined) {
+      setBalance(userData.user.balance);
+    }
+    // Optionally save token
+    if (userData.access_token) {
+      localStorage.setItem('token', userData.access_token);
+    }
+  };
+
   const handleServiceClick = (serviceName: string) => {
     if (serviceName === "Transfer") {
       warmFlow1ACache(); // Fallback warm nếu useEffect chưa kịp chạy (edge case)
@@ -86,6 +123,48 @@ export default function BankUI() {
       return;
     }
     // Other services are currently disabled per user request
+  };
+
+  const DEMO_PAYMENTS = [
+    { title: 'Travel', icon: 'flight', sector: 'Travel', mcc: '4722', color: '#3b82f6', amount: 2500000 },
+    { title: 'Tuition', icon: 'school', sector: 'Education', mcc: '8211', color: '#a855f7', amount: 15000000 },
+    { title: 'Shopping', icon: 'shopping_bag', sector: 'Shopping', mcc: '5311', color: '#ec4899', amount: 850000 },
+    { title: 'Dining', icon: 'restaurant', sector: 'F&B', mcc: '5812', color: '#f97316', amount: 350000 },
+    { title: 'Utilities', icon: 'bolt', sector: 'Utilities', mcc: '4900', color: '#eab308', amount: 450000 },
+  ];
+
+  const handleCreateDemoTransaction = async (demo: typeof DEMO_PAYMENTS[0]) => {
+    if (!user) {
+      setIsLoggingIn(true);
+      setShowPaymentMenu(false);
+      return;
+    }
+    
+    setIsCreatingDemo(true);
+    try {
+      const res = await api.post('/api/transactions', {
+        accountId: user.user.id,
+        amount: demo.amount,
+        merchantName: demo.title,
+        merchantMcc: demo.mcc,
+        description: `Demo payment for ${demo.sector}`,
+        customerName: user.user.username,
+        status: 'COMPLETED',
+        type: 'PURCHASE',
+      });
+
+      if (res.ok) {
+        const amountStr = demo.amount.toLocaleString('vi-VN');
+        setBalance(prev => prev - demo.amount);
+        setGlobalDeductToast({ show: true, amount: amountStr, remaining: balance - demo.amount });
+        setTimeout(() => setGlobalDeductToast(null), 6000);
+        setShowPaymentMenu(false);
+      }
+    } catch (err) {
+      console.error('Failed to create demo transaction:', err);
+    } finally {
+      setIsCreatingDemo(false);
+    }
   };
 
   return (
@@ -199,12 +278,40 @@ export default function BankUI() {
 
             {/* Auth Actions */}
             <section className="px-6 -mt-6 relative z-10 grid grid-cols-2 gap-4">
-              <button className="bg-secondary-container text-white py-4 rounded-xl font-bold text-sm shadow-lg hover:opacity-90 active:scale-95 transition-all">
-                LOGIN
-              </button>
-              <button className="bg-[#00306b] text-white py-4 rounded-xl font-bold text-sm shadow-lg hover:opacity-90 active:scale-95 transition-all">
-                REGISTER
-              </button>
+              {!user ? (
+                <>
+                  <button 
+                    onClick={() => setIsLoggingIn(true)}
+                    className="bg-secondary-container text-white py-4 rounded-xl font-bold text-sm shadow-lg hover:opacity-90 active:scale-95 transition-all"
+                  >
+                    LOGIN
+                  </button>
+                  <button className="bg-[#00306b] text-white py-4 rounded-xl font-bold text-sm shadow-lg hover:opacity-90 active:scale-95 transition-all">
+                    REGISTER
+                  </button>
+                </>
+              ) : (
+                <div className="col-span-2 bg-white/90 backdrop-blur-md p-4 rounded-xl shadow-lg border border-white/20 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-[#00306b] rounded-full flex items-center justify-center text-white font-bold">
+                      {(user.user?.username || user.username)?.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Authenticated</p>
+                      <p className="text-sm font-bold text-gray-800">{user.user?.username || user.username}</p>
+                      <p className="text-[11px] font-bold text-[#00306b]">
+                        {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(balance)}
+                      </p>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => setUser(null)}
+                    className="p-2 rounded-lg hover:bg-gray-100 text-gray-400 active:scale-95 transition-all"
+                  >
+                    <span className="material-symbols-outlined">logout</span>
+                  </button>
+                </div>
+              )}
             </section>
 
             {/* Banking Services Grid */}
@@ -517,27 +624,51 @@ export default function BankUI() {
 
             {/* Menu List */}
             <div className="overflow-y-auto pt-2 pb-8 flex-1 bg-gray-50/50">
-              {[
-                { title: 'Saved Bills', icon: 'electric_bolt' },
-                { title: 'Bill Payment', icon: 'receipt_long' },
-                { title: 'Mobile Top-up', icon: 'arrow_circle_up' },
-                { title: 'Tuition Fee', icon: 'school' },
-                { title: 'Auto Bill Payment', icon: 'event_note' },
-                { title: 'NAPAS Online Payment', icon: 'shopping_cart' },
-                { title: 'Payment Management', icon: 'settings' },
-                { title: 'Direct Debit Service', icon: 'assignment' },
-              ].map((item, idx) => (
-                <div 
-                  key={idx}
-                  className="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-gray-100 active:bg-gray-200 transition-colors border-b border-gray-100/50 last:border-0"
-                >
-                  <div className="flex items-center gap-4">
-                    <span className="material-symbols-outlined text-[#3d5a80] text-[26px]" style={{fontVariationSettings: "'FILL' 1"}}>{item.icon}</span>
-                    <span className="text-[16px] font-bold text-gray-800">{item.title}</span>
+              {/* Payment History Option */}
+              <div 
+                onClick={() => { setShowPaymentHistory(true); setShowPaymentMenu(false); }}
+                className="flex items-center justify-between px-6 py-5 cursor-pointer hover:bg-white active:bg-gray-100 transition-all border-b border-gray-100 bg-white/50 mb-2"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
+                    <span className="material-symbols-outlined text-[#2f66ee] text-[26px]">history</span>
                   </div>
-                  <span className="material-symbols-outlined text-gray-400 font-bold text-xl">chevron_right</span>
+                  <span className="text-[16px] font-bold text-gray-800">Payment history</span>
                 </div>
-              ))}
+                <span className="material-symbols-outlined text-gray-400 font-bold text-xl">chevron_right</span>
+              </div>
+
+              <div className="px-6 py-2">
+                <p className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-3">Quick Demo Payments</p>
+                <div className="grid grid-cols-1 gap-3">
+                  {DEMO_PAYMENTS.map((demo, idx) => (
+                    <button 
+                      key={idx}
+                      disabled={isCreatingDemo}
+                      onClick={() => handleCreateDemoTransaction(demo)}
+                      className="flex items-center justify-between p-4 bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md active:scale-[0.98] transition-all group overflow-hidden relative"
+                    >
+                      <div className="flex items-center gap-4 relative z-10">
+                        <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white" style={{backgroundColor: demo.color}}>
+                          <span className="material-symbols-outlined text-[24px]">{demo.icon}</span>
+                        </div>
+                        <div className="text-left">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[15px] font-bold text-gray-800">{demo.title}</span>
+                            <span className="px-1.5 py-0.5 bg-gray-100 text-gray-500 text-[9px] font-black rounded uppercase tracking-tighter">Demo</span>
+                          </div>
+                          <p className="text-[12px] text-gray-400 font-medium">-{demo.amount.toLocaleString('vi-VN')} VND</p>
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-end relative z-10">
+                        <span className="material-symbols-outlined text-gray-300 group-hover:text-[#2f66ee] transition-colors">add_circle</span>
+                      </div>
+                      {/* Subtle background glow on hover */}
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -636,6 +767,22 @@ export default function BankUI() {
             </div>
           </button>
         </div>
+      )}
+
+      {/* LOGIN OVERLAY */}
+      {isLoggingIn && (
+        <LoginUI 
+          onBack={() => setIsLoggingIn(false)} 
+          onLoginSuccess={handleLoginSuccess}
+        />
+      )}
+
+      {/* PAYMENT HISTORY OVERLAY */}
+      {showPaymentHistory && (
+        <PaymentHistoryUI 
+          onBack={() => setShowPaymentHistory(false)}
+          accountId={user?.user?.id}
+        />
       )}
     </div>
   );

@@ -22,6 +22,20 @@ export default defineConfig({
           });
         }
       },
+      '/api/auth': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/auth/, '/auth')
+      },
+      '/api/transactions': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/transactions/, '/transactions')
+      },
+      '/api/simulation': {
+        target: 'http://localhost:7999',
+        changeOrigin: true
+      },
       '/api/flows': {
         target: 'http://localhost:7999',
         changeOrigin: true
