@@ -32,9 +32,22 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/transactions/, '/transactions')
       },
-      '/api/simulation': {
-        target: 'http://localhost:7999',
-        changeOrigin: true
+      // Real Web-Push notifications (replaces the old polling-based
+      // /api/simulation + /api/notifications/check flow).
+      '/api/push': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/push/, '/push')
+      },
+      '/api/notifications': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/notifications/, '/notifications')
+      },
+      '/api/products': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/products/, '/products')
       },
       '/api/flows': {
         target: 'http://localhost:7999',
@@ -55,11 +68,17 @@ export default defineConfig({
     react(),
     basicSsl(),
     VitePWA({
+      // injectManifest lets us ship a custom service worker that handles
+      // Web-Push events (the default `generateSW` strategy doesn't).
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
       registerType: 'autoUpdate',
       devOptions: {
-        enabled: true
+        enabled: true,
+        type: 'module'
       },
-      workbox: {
+      injectManifest: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,vrm,vrma}']
       },
       manifest: {

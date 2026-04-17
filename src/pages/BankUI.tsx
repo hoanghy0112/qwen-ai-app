@@ -6,6 +6,7 @@ import InvestmentUI from "../components/InvestmentUI";
 import LoginUI from "../components/LoginUI";
 import PaymentHistoryUI from "../components/PaymentHistoryUI";
 import { api } from "../lib/api";
+import { registerPush, unregisterPush, onPushMessage } from "../lib/push";
 
 export default function BankUI() {
   const [notification, setNotification] = useState("");
@@ -13,6 +14,7 @@ export default function BankUI() {
   const [showPaymentMenu, setShowPaymentMenu] = useState(false);
   const [balance, setBalance] = useState(0);
   const [preloadedAudioUrl, setPreloadedAudioUrl] = useState<string | null>(null);
+  const [productContext, setProductContext] = useState<any>(null);
   const [user, setUser] = useState<any>(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [showPaymentHistory, setShowPaymentHistory] = useState(false);
@@ -20,7 +22,7 @@ export default function BankUI() {
 
   // ── Global persistent notifications ──
   const [globalDeductToast, setGlobalDeductToast] = useState<{ show: boolean; amount: string; remaining: number } | null>(null);
-  const [globalAdvisorToast, setGlobalAdvisorToast] = useState<{ show: boolean; audioUrl: string | null; script: string } | null>(null);
+  const [globalAdvisorToast, setGlobalAdvisorToast] = useState<{ show: boolean; audioUrl: string | null; script: string; payload?: any } | null>(null);
   const [simulationAlert, setSimulationAlert] = useState<{ stock_code: string; status: string; message: string } | null>(null);
 
   // ── Fix 3: Warm Flow 1A ngay khi BankUI mount (trang Home) ──
@@ -45,21 +47,112 @@ export default function BankUI() {
     fetchProfile();
   }, []);
 
-  // Simulation Alert Polling
+  // ── Web-Push (PWA) ──────────────────────────────────────────────
+  // Replaces the old `/api/simulation/check` + `/api/notifications/check`
+  // polling loops. The backend now dispatches Web-Push via VAPID to the
+  // service worker (see FE/src/sw.ts), which:
+  //   1) Shows a native OS notification (works when the tab is closed), and
+  //   2) Posts an in-app message so we can render the existing toast UI
+  //      below without a page reload.
+  const accountId: string | undefined = user?.user?.id;
+
+  /*
+  // Register / refresh the push subscription whenever the logged-in
+  // account changes (including on first mount for anonymous broadcasts).
   React.useEffect(() => {
-    const pollInterval = setInterval(async () => {
+    let cancelled = false;
+    (async () => {
       try {
-        const res = await api.get('/api/simulation/check');
-        const data = await res.json();
-        if (data && data.alert) {
-          setSimulationAlert(data.alert);
+        await registerPush(accountId ?? null);
+        if (cancelled) return;
+      } catch (err) {
+        console.warn('[push] registration failed:', err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [accountId]);
+  */
+
+  // ── Notification Polling ───────────────────────────────────────────
+  // Replaces Web-Push listeners with a continuous polling mechanism.
+  // Polls every 3 seconds for new unread notifications.
+  React.useEffect(() => {
+    if (!user) return;
+
+    const poll = async () => {
+      try {
+        const res = await api.get('/api/notifications/check');
+        if (res.ok) {
+          const { notifications } = await res.json();
+          if (notifications && notifications.length > 0) {
+            for (const notif of notifications) {
+              await handleNotification(notif);
+              // Mark as read immediately so we don't show it again in next poll
+              api.patch(`/api/notifications/${notif.id}/read`, {}).catch(() => {});
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('[polling] check failed:', err);
+      }
+    };
+
+    const handleNotification = async (notif: any) => {
+      if (notif.type === 'alert') {
+        const d = notif.payload || {};
+        setSimulationAlert({
+          stock_code: d.stock_code || 'UNKNOWN',
+          status: d.status || 'VOLATILE',
+          message: d.message || notif.body || notif.title,
+        });
+      } else if (notif.type === 'recommendation') {
+        await handleAdvisor(notif.payload || {});
+      }
+    };
+
+    const handleAdvisor = async (payload: any) => {
+      const script: string = payload?.script || '';
+      if (!script) return;
+      let audioUrl: string | null = null;
+      try {
+        const ttsRes = await fetch('http://localhost:5000/tts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: script }),
+        });
+        if (ttsRes.ok) {
+          const blob = await ttsRes.blob();
+          audioUrl = URL.createObjectURL(blob);
         }
       } catch (e) {
-        // Silently fail if server is down
+        // TTS is best-effort
       }
-    }, 4000); // Check every 4 seconds
-    return () => clearInterval(pollInterval);
+      setGlobalAdvisorToast({ show: true, audioUrl, script, payload });
+    };
+
+    const interval = setInterval(poll, 3000);
+    poll(); // Initial check
+
+    return () => clearInterval(interval);
+  }, [user]);
+
+  // We keep onPushMessage for now as a fallback or remove if strictly requested
+  // but the user said "Migrate from", so I'll comment out the push listener.
+  /*
+  React.useEffect(() => {
+    // ... (old push listener code)
   }, []);
+  */
+
+  // On logout — drop the subscription so the device stops receiving
+  // push for a signed-out user.
+  React.useEffect(() => {
+    if (user === null) {
+      unregisterPush().catch(() => {});
+    }
+  }, [user]);
 
   const handleTransactionComplete = (amount: string) => {
     setGlobalDeductToast({ show: true, amount, remaining: balance });
@@ -232,6 +325,7 @@ export default function BankUI() {
                 setNotification(msg);
                 setPreloadedAudioUrl(null);
               }
+              setProductContext(null);
               setActiveTab("AI Advisor");
             }}
             onTransactionComplete={handleTransactionComplete}
@@ -392,6 +486,7 @@ export default function BankUI() {
             <AiAssistantWidget
               textToSpeak={notification}
               preloadedAudioUrl={preloadedAudioUrl ?? undefined}
+              productContext={productContext}
               onAudioEnd={() => { setNotification(""); setPreloadedAudioUrl(null); }}
               onTextInput={(val) => setNotification(val)}
             />
@@ -712,10 +807,11 @@ export default function BankUI() {
         }}>
           <button
             onClick={() => {
-              const { audioUrl, script } = globalAdvisorToast;
+              const { audioUrl, script, payload } = globalAdvisorToast;
               setGlobalAdvisorToast(null);
               setNotification(script);
               setPreloadedAudioUrl(audioUrl);
+              setProductContext(payload);
               setActiveTab('AI Advisor');
             }}
             className="w-full bg-gradient-to-r from-[#2f66ee] to-[#1a8cff] rounded-2xl px-4 py-3 shadow-[0_8px_30px_rgba(47,102,238,0.35)] flex items-center gap-3 text-left active:scale-[0.98] transition-transform"

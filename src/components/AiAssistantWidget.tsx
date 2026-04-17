@@ -63,9 +63,10 @@ interface FAQResponse {
   suggested_next_action?: string;
 }
 
-export default function AiAssistantWidget({ textToSpeak, preloadedAudioUrl, onAudioEnd, onTextInput }: {
+export default function AiAssistantWidget({ textToSpeak, preloadedAudioUrl, productContext, onAudioEnd, onTextInput }: {
   textToSpeak: string;
   preloadedAudioUrl?: string;
+  productContext?: any;
   onAudioEnd?: () => void;
   onTextInput?: (t: string) => void;
 }) {
@@ -107,8 +108,13 @@ export default function AiAssistantWidget({ textToSpeak, preloadedAudioUrl, onAu
         question: userText,
         context: {
           flow_type: 'recommend',
-          last_script: null,
-          product_id: null,
+          last_script: textToSpeak,
+          product_id: productContext?.product_id || null,
+          product_name: productContext?.product_name || null,
+          product_description: productContext?.product_description || null,
+          product_content: productContext?.product_content || null,
+          product_condition: productContext?.product_condition || null,
+          product_attributes: productContext?.product_attributes || null,
           allocation: null
         }
       });

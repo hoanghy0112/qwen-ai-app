@@ -29,6 +29,8 @@ export const api = {
     apiFetch(endpoint, { ...options, method: 'POST', body: body ? JSON.stringify(body) : undefined }),
   put: (endpoint: string, body?: any, options: RequestInit = {}) => 
     apiFetch(endpoint, { ...options, method: 'PUT', body: body ? JSON.stringify(body) : undefined }),
+  patch: (endpoint: string, body?: any, options: RequestInit = {}) => 
+    apiFetch(endpoint, { ...options, method: 'PATCH', body: body ? JSON.stringify(body) : undefined }),
   delete: (endpoint: string, options: RequestInit = {}) => 
     apiFetch(endpoint, { ...options, method: 'DELETE' }),
 };
