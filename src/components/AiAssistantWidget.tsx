@@ -260,6 +260,7 @@ export default function AiAssistantWidget({ textToSpeak, preloadedAudioUrl, onAu
                 url="/Test.vrm" 
                 textToSpeak={textToSpeak}
                 isSpeaking={isActuallyTalking}
+                isThinking={isLoading}
                 triggerCount={triggerCount}
                 analyserRef={analyserRef}
                 disableTracking={true}

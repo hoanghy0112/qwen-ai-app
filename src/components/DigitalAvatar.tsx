@@ -30,7 +30,7 @@ let mouthTarget = { aa: 0, ee: 0, ih: 0, oh: 0, ou: 0 };
 let mouthCurrent = { aa: 0, ee: 0, ih: 0, oh: 0, ou: 0 };
 let currentHappyValue = 0,
   moodTransition = 0;
-let avatarState: "walking" | "pausing" | "engaged" | "talking" = "walking";
+let avatarState: "walking" | "pausing" | "engaged" | "talking" | "thinking" = "walking";
 let currentMood: "neutral" | "happy" | "talking" = "neutral";
 
 if (typeof window !== "undefined") {
@@ -61,20 +61,23 @@ const animationMotions = {
   wave1: "/animations/Waving (1).vrma",
   talk: "/animations/Talking.vrma",
   talk1: "/animations/Talking (1).vrma",
+  thinking: "/animations/Thinking.vrma",
 };
 
 // ====== REACT COMPONENT ======
 export default function DigitalAvatar({
   url,
   textToSpeak,
-  isSpeaking,
+  isSpeaking = false,
+  isThinking = false,
   triggerCount,
   analyserRef,
   disableTracking,
 }: {
   url: string;
   textToSpeak: string;
-  isSpeaking: boolean;
+  isSpeaking?: boolean;
+  isThinking?: boolean;
   triggerCount: number;
   analyserRef?: React.RefObject<AnalyserNode | null>;
   disableTracking?: boolean;
@@ -87,6 +90,7 @@ export default function DigitalAvatar({
       vrm={vrm}
       textToSpeak={textToSpeak}
       isSpeaking={isSpeaking}
+      isThinking={isThinking}
       triggerCount={triggerCount}
       analyserRef={analyserRef}
       disableTracking={disableTracking}
@@ -97,14 +101,16 @@ export default function DigitalAvatar({
 function DigitalAvatarInner({
   vrm,
   textToSpeak,
-  isSpeaking,
+  isSpeaking = false,
+  isThinking = false,
   triggerCount,
   analyserRef,
   disableTracking,
 }: {
   vrm: any;
   textToSpeak: string;
-  isSpeaking: boolean;
+  isSpeaking?: boolean;
+  isThinking?: boolean;
   triggerCount: number;
   analyserRef?: React.RefObject<AnalyserNode | null>;
   disableTracking?: boolean;
@@ -167,17 +173,36 @@ function DigitalAvatarInner({
             : actions.talk1
           : actions.talk;
       send({ happy: { value: 0.4 } });
+    } else if (isThinking) {
+      avatarState = "thinking";
+      currentMood = "neutral";
+      moodTransition = 0;
+      targetAction = actions.thinking || actions.idle;
+      if (targetAction === actions.thinking) {
+        targetAction.setLoop(THREE.LoopRepeat, Infinity);
+      }
+      send({ happy: { value: 0.2 } });
     } else if (triggerCount > prevTriggerRef.current) {
-      targetAction =
-        actions.wave && actions.wave1
-          ? Math.random() > 0.5
-            ? actions.wave
-            : actions.wave1
+      const shouldThinking = triggerCount % 2 === 0;
+      if (shouldThinking && actions.thinking) {
+        targetAction = actions.thinking;
+      } else {
+        const waveActions: THREE.AnimationAction[] = [];
+        if (actions.wave) waveActions.push(actions.wave);
+        if (actions.wave1) waveActions.push(actions.wave1);
+        targetAction = waveActions.length
+          ? waveActions[Math.floor(Math.random() * waveActions.length)]
           : actions.wave;
+      }
       if (targetAction) {
         targetAction.setLoop(THREE.LoopOnce, 1).clampWhenFinished = true;
       }
-      send({ happy: { value: 1, hold: 2, decay: 0.5 } });
+      if (targetAction === actions.thinking) {
+        avatarState = "thinking";
+        send({ happy: { value: 0.2 } });
+      } else {
+        send({ happy: { value: 1, hold: 2, decay: 0.5 } });
+      }
     } else {
       avatarState = "pausing";
       targetAction = actions.idle;
@@ -190,12 +215,19 @@ function DigitalAvatarInner({
       targetAction.reset().fadeIn(0.3).play();
       activeAnimRef.current = targetAction;
 
-      if (targetAction === actions.wave || targetAction === actions.wave1) {
+      if (
+        targetAction === actions.wave ||
+        targetAction === actions.wave1 ||
+        targetAction === actions.thinking
+      ) {
         const onFinished = (e: any) => {
           if (e.action === targetAction && actions.idle) {
             targetAction?.fadeOut(0.3);
             actions.idle.reset().fadeIn(0.3).play();
             activeAnimRef.current = actions.idle;
+            if (avatarState === "thinking") {
+              avatarState = "pausing";
+            }
           }
         };
         targetAction.getMixer().addEventListener("finished", onFinished);
@@ -203,7 +235,7 @@ function DigitalAvatarInner({
           targetAction?.getMixer().removeEventListener("finished", onFinished);
       }
     }
-  }, [isSpeaking, triggerCount, vrm, send, actions]);
+  }, [isSpeaking, isThinking, triggerCount, vrm, send, actions]);
 
   useFrame((state, delta) => {
     if (!vrm) return;
@@ -221,7 +253,7 @@ function DigitalAvatarInner({
     }
 
     // --- BB-8 STYLE PHYSICS MOVEMENT ---
-    if (avatarState === "walking" || avatarState === "pausing") {
+    if (avatarState === "walking" || avatarState === "pausing" || avatarState === "thinking") {
       const rx = vrm.scene.position.x;
       microOffsetTimer += delta;
       if (microOffsetTimer > 1.8 + Math.random() * 1.5) {
@@ -240,7 +272,11 @@ function DigitalAvatarInner({
       const magnetBoost = 1.0 + hoverProximity * 1.2;
 
       const dx = effectiveTargetX - rx;
-      if (Math.abs(dx) > 0.2) {
+      if (avatarState === "thinking") {
+        velX *= 0.7;
+        isWalking = false;
+        isPausing = true;
+      } else if (Math.abs(dx) > 0.2) {
         velX += dx * 0.0006 * magnetBoost;
         isWalking = true;
         isPausing = false;
@@ -385,9 +421,12 @@ function DigitalAvatarInner({
           : mouseNormX * (walking ? 0.4 : 0.8);
         headCurrentRotY +=
           (headTargetY - headCurrentRotY) * (walking ? 0.06 : 0.1);
+        const thinkingY = avatarState === "thinking" ? Math.sin(elapsed * 0.9) * 0.08 : 0;
+        const thinkingX = avatarState === "thinking" ? 0.15 + Math.sin(elapsed * 1.6) * 0.03 : 0;
         head.rotation.y = lerp(
           head.rotation.y,
           headCurrentRotY +
+            thinkingY +
             (!walking && !effectiveDisableTracking
               ? Math.sin(elapsed * 0.9) * 0.01
               : 0),
@@ -395,9 +434,11 @@ function DigitalAvatarInner({
         );
         head.rotation.x = lerp(
           head.rotation.x,
-          (!walking
-            ? Math.sin(elapsed * 1.2) * 0.02 + Math.sin(elapsed * 0.7) * 0.008
-            : 0) -
+          (avatarState === "thinking"
+            ? thinkingX
+            : !walking
+              ? Math.sin(elapsed * 1.2) * 0.02 + Math.sin(elapsed * 0.7) * 0.008
+              : 0) -
             (effectiveDisableTracking
               ? 0
               : mouseNormY * (walking ? 0.15 : 0.25)),
@@ -417,10 +458,10 @@ function DigitalAvatarInner({
       }
     }
 
-    if (avatarState === "walking" || avatarState === "pausing") {
+    if (avatarState === "walking" || avatarState === "pausing" || avatarState === "thinking") {
       const bodyTargetY = Math.atan2(targetX - vrm.scene.position.x, 3.5);
       vrm.scene.rotation.y = lerp(vrm.scene.rotation.y, bodyTargetY, 0.06);
-      if (avatarState === "pausing")
+      if (avatarState === "pausing" || avatarState === "thinking")
         vrm.scene.rotation.z = lerp(vrm.scene.rotation.z, 0, 0.06);
     }
 
