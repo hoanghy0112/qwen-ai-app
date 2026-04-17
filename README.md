@@ -1,4 +1,4 @@
-# 🤖 Trợ lý Shinhan AI Digital Avatar
+# 🤖 Flux AI
 
 Xin chào! Đây là dự án trợ lý trí tuệ nhân tạo (AI Avatar 3D) chạy trực tiếp trên nền web, hỗ trợ tích hợp môi trường Progressive Web App (PWA) để cài đặt thành App trên thiết bị di động.
 
