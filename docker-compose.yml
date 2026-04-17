@@ -1,0 +1,11 @@
+version: '3.8'
+
+services:
+  fe:
+    build: .
+    network_mode: "host"
+    env_file:
+      - .env
+    volumes:
+      - .:/app
+      - /app/node_modules
