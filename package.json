@@ -31,6 +31,8 @@
     "@react-three/fiber": "^9.5.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
-    "three-vrm-utils": "^1.6.0"
+    "three-vrm-utils": "^1.6.0",
+    "workbox-precaching": "^7.1.0",
+    "workbox-window": "^7.1.0"
   }
 }

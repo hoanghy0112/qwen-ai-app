@@ -1,5 +1,5 @@
 # Dockerfile for FE
-FROM node:18-alpine
+FROM node:22-slim
 
 WORKDIR /app
 COPY package*.json ./

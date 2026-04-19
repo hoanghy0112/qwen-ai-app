@@ -2,10 +2,11 @@ version: '3.8'
 
 services:
   fe:
+    image: hoanghy/qwen-ai-app-fe:latest
     build: .
     network_mode: "host"
     env_file:
       - .env
-    volumes:
-      - .:/app
-      - /app/node_modules
+#    volumes:
+#      - .:/app
+#      - /app/node_modules
