@@ -26,6 +26,12 @@ importers:
       three-vrm-utils:
         specifier: ^1.6.0
         version: 1.6.0(@pixiv/three-vrm-animation@3.5.2(three@0.183.2))(@pixiv/three-vrm@3.5.2(three@0.183.2))(@react-three/fiber@9.6.0(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(three@0.183.2))(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(three@0.183.2)
+      workbox-precaching:
+        specifier: ^7.1.0
+        version: 7.4.0
+      workbox-window:
+        specifier: ^7.1.0
+        version: 7.4.0
     devDependencies:
       '@pixiv/three-vrm':
         specifier: ^3.5.1
@@ -39,9 +45,6 @@ importers:
       '@types/three':
         specifier: ^0.183.1
         version: 0.183.1
-      '@vitejs/plugin-basic-ssl':
-        specifier: ^2.3.0
-        version: 2.3.0(vite@8.0.8(terser@5.46.1))
       '@vitejs/plugin-react':
         specifier: ^6.0.1
         version: 6.0.1(vite@8.0.8(terser@5.46.1))
@@ -913,12 +916,6 @@ packages:
     resolution: {integrity: sha512-Yy19y6O2GJq8f7CHf7L0nxL8bf4PZCPaVOCgJrusOeFHY1LvHgYXnmnXg6N5iwAnbgbZCDjo60SiM6IPJi9C5g==}
     peerDependencies:
       react: '>= 16.8.0'
-
-  '@vitejs/plugin-basic-ssl@2.3.0':
-    resolution: {integrity: sha512-bdyo8rB3NnQbikdMpHaML9Z1OZPBu6fFOBo+OtxsBlvMJtysWskmBcnbIDhUqgC8tcxNv/a+BcV5U+2nQMm1OQ==}
-    engines: {node: ^18.0.0 || ^20.0.0 || >=22.0.0}
-    peerDependencies:
-      vite: ^6.0.0 || ^7.0.0 || ^8.0.0
 
   '@vitejs/plugin-react@6.0.1':
     resolution: {integrity: sha512-l9X/E3cDb+xY3SWzlG1MOGt2usfEHGMNIaegaUGFsLkb3RCn/k8/TOXBcab+OndDI4TBtktT8/9BwwW8Vi9KUQ==}
@@ -3162,10 +3159,6 @@ snapshots:
     dependencies:
       '@use-gesture/core': 10.3.1
       react: 19.2.5
-
-  '@vitejs/plugin-basic-ssl@2.3.0(vite@8.0.8(terser@5.46.1))':
-    dependencies:
-      vite: 8.0.8(terser@5.46.1)
 
   '@vitejs/plugin-react@6.0.1(vite@8.0.8(terser@5.46.1))':
     dependencies:

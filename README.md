@@ -20,9 +20,8 @@ Make sure you have **Node.js v18+** installed.
    ```bash
    npm run dev
    ```
-   The terminal will show a local URL (for example, `https://localhost:3000`). Open it in your browser.
+   The terminal will show a local URL (for example, `http://localhost:3000`). Open it in your browser.
 
-Dev mode is configured with `basic-ssl` to auto-generate HTTPS certificates. This is useful when testing over LAN on mobile devices, especially for Text-to-Speech and PWA installation scenarios.
 
 ---
 

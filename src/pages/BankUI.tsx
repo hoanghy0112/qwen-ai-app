@@ -117,7 +117,7 @@ export default function BankUI() {
       if (!script) return;
       let audioUrl: string | null = null;
       try {
-        const ttsRes = await fetch('http://localhost:5000/tts', {
+        const ttsRes = await fetch('/api/cosyvoice', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ text: script }),

@@ -1,7 +1,6 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
-import basicSsl from '@vitejs/plugin-basic-ssl';
 
 export default defineConfig({
   root: './',
@@ -22,33 +21,6 @@ export default defineConfig({
           });
         }
       },
-      '/api/auth': {
-        target: 'http://localhost:3001',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api\/auth/, '/auth')
-      },
-      '/api/transactions': {
-        target: 'http://localhost:3001',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api\/transactions/, '/transactions')
-      },
-      // Real Web-Push notifications (replaces the old polling-based
-      // /api/simulation + /api/notifications/check flow).
-      '/api/push': {
-        target: 'http://localhost:3001',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api\/push/, '/push')
-      },
-      '/api/notifications': {
-        target: 'http://localhost:3001',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api\/notifications/, '/notifications')
-      },
-      '/api/products': {
-        target: 'http://localhost:3001',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api\/products/, '/products')
-      },
       '/api/flows': {
         target: 'http://localhost:7999',
         changeOrigin: true
@@ -61,12 +33,16 @@ export default defineConfig({
         target: 'http://localhost:5000',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/cosyvoice/, '/tts')
+      },
+      '/api': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, '')
       }
     }
   },
   plugins: [
     react(),
-    basicSsl(),
     VitePWA({
       // injectManifest lets us ship a custom service worker that handles
       // Web-Push events (the default `generateSW` strategy doesn't).
